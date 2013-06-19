@@ -1,0 +1,1 @@
+mvn install:install-file -Dfile=/Users/charbonb/Downloads/dazzle.jar -DgroupId=dazzle -DartifactId=dazzle -Dversion=1 -Dpackaging=jar -DgeneratePom=true

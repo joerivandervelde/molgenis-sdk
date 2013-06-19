@@ -80,5 +80,10 @@
 			<artifactId>spring-webmvc</artifactId>
 			<version>3.2.2.RELEASE</version>
 		</dependency>
+		<dependency>
+			<groupId>dazzle</groupId>
+			<artifactId>dazzle</artifactId>
+			<version>1</version>
+		</dependency>
 	</dependencies>
 </project>
