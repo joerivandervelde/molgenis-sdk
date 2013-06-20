@@ -1,0 +1,10 @@
+<dazzle xmlns="http://www.biojava.org/2000/dazzle">
+  <datasource id="demo" jclass="org.biojava.servlets.dazzle.datasource.GFFAnnotationSource">
+    <string name="name" value="Demo_data" />
+    <string name="description" value="Demo datasource for GFF file" />
+    <string name="version" value="default" />
+    <string name="fileName" value="/demo.gff" />
+    <boolean name="dotVersions" value="true" />
+    <string name="mapMaster" value="http://localhost:8080/das/test/" />
+  </datasource>
+</dazzle>
