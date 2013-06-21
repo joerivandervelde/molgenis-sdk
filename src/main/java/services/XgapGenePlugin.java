@@ -60,8 +60,10 @@ public class XgapGenePlugin extends AbstractGFFFeatureSource
 			for(Gene g : genes)
 			{
 				GFFFeature gff = new GFFFeature();
-
+				gff.setLink("http://www.wormqtl.org/molgenis.do?__target=QtlFinderPublic2&select=QtlFinderPublic2&p=" + g.getName());
 				gff.setType("gene");
+				gff.setTypeId(g.getSeq());
+				gff.setMethod(g.getSymbol());
 				gff.setLabel(g.getLabel());
 				gff.setStart(g.getBpStart()+"");
 				gff.setEnd(g.getBpEnd()+"");
