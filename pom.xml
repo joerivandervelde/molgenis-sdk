@@ -80,5 +80,30 @@
 			<artifactId>spring-webmvc</artifactId>
 			<version>3.2.2.RELEASE</version>
 		</dependency>
+		<dependency>
+			<groupId>dazzle</groupId>
+			<artifactId>dazzle</artifactId>
+			<version>1</version>
+		</dependency>
+		<dependency>
+			<groupId>dazzle</groupId>
+			<artifactId>bytecode</artifactId>
+			<version>1</version>
+		</dependency>
+		<dependency>
+			<groupId>dazzle</groupId>
+			<artifactId>biojava</artifactId>
+			<version>1</version>
+		</dependency>
+		<dependency>
+			<groupId>dazzle</groupId>
+			<artifactId>servlet-api</artifactId>
+			<version>3.0</version>
+		</dependency>
+		<dependency>
+			<groupId>dazzle</groupId>
+			<artifactId>dasmi-model</artifactId>
+			<version>1</version>
+		</dependency>
 	</dependencies>
 </project>

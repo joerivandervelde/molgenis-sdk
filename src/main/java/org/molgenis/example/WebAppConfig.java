@@ -1,4 +1,6 @@
 package org.molgenis.example;
+
+import org.molgenis.DatabaseConfig;
 import org.molgenis.util.ApplicationContextProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -12,13 +14,11 @@ import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
 
-import org.molgenis.DatabaseConfig;
-
 @Configuration
 @EnableWebMvc
 @ComponentScan("org.molgenis")
 @Import(
-{ DatabaseConfig.class , SdkConfig.class})
+{ DatabaseConfig.class, SdkConfig.class })
 public class WebAppConfig extends WebMvcConfigurerAdapter
 {
 	@Override
