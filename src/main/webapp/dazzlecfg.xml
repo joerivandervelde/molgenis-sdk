@@ -7,4 +7,9 @@
     <boolean name="dotVersions" value="true" />
     <string name="mapMaster" value="http://localhost:8080/das/test/" />
   </datasource>
+   <datasource id="wormgenes" jclass="services.XgapGenePlugin">
+    <string name="name" value="database_gene_test" />
+    <string name="description" value="a demo for how to write a Dazzle plugin" />
+    <string name="version" value="1.0" />
+  </datasource>
 </dazzle>

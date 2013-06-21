@@ -1,0 +1,9 @@
+name	orderNr	isAutosomal	investigation_name	bplength
+I	1	TRUE	Panacea	15072423
+II	2	TRUE	Panacea	15279345
+III	3	TRUE	Panacea	13783700
+IV	4	TRUE	Panacea	17493793
+V	5	TRUE	Panacea	20924149
+X	6	FALSE	Panacea	17718866
+MtDNA	7	FALSE	Panacea	13794
+unknown	8	FALSE	Panacea	
