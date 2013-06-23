@@ -2,14 +2,70 @@
 <molgenis name="example">
 	<plugin name="molgenis_header" type="plugins.header.MolgenisHeader" />
 	<menu name="Main" position="left">
-		<!--form name="Experiments" entity="Experiment">
-			<menu name="ExperimentMenu" position="top_left">
-				<form name="Samples" entity="Sample" view="list" commands="commands.TestXrefChangeCommand" />
-				<form name="Traits" entity="Trait" view="list" />
-				<form name="Data" entity="Data" />
-				<form name="AggregateData" entity="AggregateData" commands="commands.TestMrefChangeCommand" />
-			</menu>
-		</form-->
+	
+	<menu name="Classes">
+		<form name="SystemClasses" entity="SystemClass" />
+		<form name="EntityClasses" entity="EntityClass" />
+		<form name="ValueClasses" entity="ValueClass" />
+		<form name="TargetClasses" entity="TargetClass" />
+		<form name="CustomTargetClasses" entity="CustomClass" />
+	</menu>
+	
+	<menu name="Targets">
+		<form name="AllTargets" entity="Target" />
+	</menu>
+	
+	<menu name="Features">
+		<form name="AllFeatures" entity="Feature" />
+	</menu>
+	
+	<menu name="ExperimentData">
+		<form name="Protocols" entity="Protocol">
+			<form name="SubProtocols" entity="SubProtocol" />
+			<form name="DataSets" entity="DataSet">
+				<form name="DataItems" entity="DataItem" />
+				<form name="Observations" entity="Observation">
+					<form name="ObservedValues" entity="ObservedValue">
+						<form name="Value" entity="Value" />
+					</form>
+				</form>
+			</form>	
+			
+		</form>
+	</menu>
+		
+	
+	<menu name="FlexibleColumns">
+		<form name="FlexCols" entity="FlexCol">
+			<form name="FlexColValues" entity="FlexColValue" />
+		</form>
+	</menu>
+	
+	<menu name="Values">
+		<form name="AllValues" entity="Value" />
+		<form name="Filters" entity="Filter" />
+		<form name="Bool" entity="BoolValue" />
+		<form name="Categorical" entity="CategoricalValue" />
+		<form name="Date" entity="DateValue" />
+		<form name="DateTime" entity="DateTimeValue" />
+		<form name="Decimal" entity="DecimalValue" />
+		<form name="Email" entity="EmailValue" />
+		<form name="Html" entity="HtmlValue" />
+		<form name="Hyperlink" entity="HyperlinkValue" />
+		<form name="Int" entity="IntValue" />
+		<form name="Long" entity="LongValue" />
+		<form name="Mref" entity="MrefValue" />
+		<form name="String" entity="StringValue" />
+		<form name="Text" entity="TextValue" />
+		<form name="Xref" entity="XrefValue" />
+	</menu>
+	
+	<menu name="Ontologies">
+		<form name="OntologySources" entity="OntologySource">
+			<form name="OntologyTerms" entity="OntologyTerm" />
+		</form>
+	</menu>
+		
 		<plugin name="PluginExample" type="plugins.genericwizard.GenericWizard" />
 		<plugin name="EmptyPlugin" type="plugins.empty.EmptyPlugin" />
 	</menu>
