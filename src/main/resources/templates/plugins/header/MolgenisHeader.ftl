@@ -5,13 +5,17 @@
  * THIS FILE IS A TEMPLATE. PLEASE EDIT :-)
 -->
 <#macro plugins_header_MolgenisHeader screen>
-<div id="header">	
+<div id="header">
+	<br>
+	<a href="http://www.molgenis.org">
+		<img src="img/logo_molgenis.gif" height="25px" width="25px" align="left" />
+	</a>
 	<p>
-		<a href="http://www.molgenis.org">
-			<img src="generated-res/img/logo_molgenis.gif" height="70px" align="right"/>
-		</a>
-		&nbsp;${application.getLabel()}
+	&nbsp;OMX3 pilot		
 	</p>
-</div>
+	<nobr>
+	
 <div align="right" style="color: maroon; font: 12px Arial;margin-right: 10px;"><a href="about.html">About</a>  | <a href="generated-doc/objectmodel.html">Data model</a>  | <a href="generated-doc/fileformat.html">File format</a> | <a href="api/R">R-interface</a> | <a href="api/find">HTTP</a> | <a href="api/rest/?_wadl">REST</a> | <a href="api/soap?wsdl">SOAP</a></div>
+	
+</div>
 </#macro>

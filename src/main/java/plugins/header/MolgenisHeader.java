@@ -35,7 +35,7 @@ public class MolgenisHeader extends PluginModel
 	@Override
 	public String getViewTemplate()
 	{
-		return "plugins/header/MolgenisHeader.ftl";
+		return "templates/" + MolgenisHeader.class.getName().replace('.', '/') + ".ftl";
 	}
 
 	@Override
