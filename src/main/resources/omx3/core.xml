@@ -19,14 +19,14 @@
 				All data types that needs some form of human recognizability should extend from Identifiable. This adds an 'Identifier' field which is human- and computer readable, and a 'Name' field which acts like a pretty human readable label.
 			</description>
 			<field name="Identifier" type="string" description="'Acts both as a machine- and human readable secondary key. This string value conforms to a few naming rules and is safe to use in different enviroments (operating systems, programming languages, etc). Typical names are 'HGVST007625' or 'INDV00034'. When not provided, it is created automatically. Forexample 'Marker_00000001' or 'Study_00000345'."/>
-			<field name="Name" nillable="true" type="string" description="'Name' acts like a humanreadable 'label' field. It is not unique and can contain 'unsafe' characters." />
+			<field name="Name" nillable="false" type="string" description="'Name' acts like a humanreadable 'label' field. It is not unique and can contain 'unsafe' characters" />
 			<unique fields="Identifier" description="The identifier is globally unique so it can be used as a secondary key, and 'external identifier'."/>
 			<unique fields="Name,Identifier" description="We add an extra secondary key including 'Name' so labels can be conveniently created."/>
 		</entity>
 		
 		<entity name="SystemClass" system="true" implements="AutoId" xref_label="EntityClassName">
 			<description>
-				Referenceable catalog of this applications' menus, forms and plugins. The contents of this table is generated using and GUI items, and should under no circumstance be modified at runtime by anyone.
+				Referenceable catalog of this applications' system entities, menus, forms and plugins. The contents of this table is generated using and GUI items, and should under no circumstance be modified at runtime by anyone.
 			</description>
 			<field name="EntityName" nillable="false" description="Name of the entity, e.g. 'AdminMenu' or 'ProtocolViewerPlugin'." />
 			<field name="EntityType" nillable="false" description="Type of the entity: 'FORM', 'PLUGIN' or 'MENU'." />
@@ -34,19 +34,19 @@
 			<unique fields="EntityName,EntityType" description="Name is unique within type, so e.g. there can be both a form 'ProtocolViewer' and a plugin 'ProtocolViewer'."/>
 		</entity>
 		
-		<entity name="EntityClass" extends="SystemClass">
+		<entity name="EntityClass" system="true" extends="SystemClass">
 			<description>
-				Referenceable catalog of generated database entity class names. The content of EntityClass is automatically filled by 'FillMeta', and should under no circumstance be modified at runtime by anyone.
+				Referenceable catalog of generated database non-sytem entity class names. The content of EntityClass is automatically filled by 'FillMeta', and should under no circumstance be modified at runtime by anyone.
 			</description>
 		</entity>
 		
-		<entity name="ValueClass" extends="EntityClass">
+		<entity name="ValueClass" system="true" extends="EntityClass">
 			<description>
 				All classes that implement Value directly. Useful for selecting ValueType in Feature. Any classes that implement Target (which is a special type of Value) are ignored here. ValueClass cannot be customized by the user at runtime.
 			</description>
 		</entity>
 		
-		<entity name="TargetClass" extends="EntityClass">
+		<entity name="TargetClass" system="true" extends="EntityClass">
 			<description>
 				All classes that implement Target. Useful for selecting ScopeClass in Feature.
 				The content of TargetClass is automatically filled by 'FillMeta', and should under no circumstance be modified at runtime by anyone. The content of TargetClass is automatically filled by 'FillMeta', and should under no circumstance be modified at runtime by anyone. Runtime extension happens via CustomClass.
@@ -171,7 +171,7 @@
 			<description>
 				A data set is a collection of data, usually presented in tabular form. Each column represents a particular variable. Each row corresponds to a given member of the data set in question. It lists values for each of the variables, such as height and weight of an object. The variables included correspond to the ones in the protocol that this data set belongs to. Any data set and can therefore be thought of as an instance of the protocol it belongs to, like rows in a database are instances of their table definition.
 			</description>
-			<field name="DataSource" type="xref" xref_entity="DataSource" nillable="false"/>
+			<field name="DataSource" type="xref" xref_entity="DataSource" nillable="true"/>
 			<field name="Protocol" type="xref" xref_entity="Protocol" nillable="true" description="The protocol used to create this DataSet. All Features in this Protocol will be measured. Any Features in SubProtocols are already included in the list of the original protocol."/>
 			<field name="StartTime" type="datetime" nillable="true" description="Time when the dataset was created." />
 			<field name="EndTime" type="datetime" nillable="true" description="Time when the dataset was finished" />

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <molgenis name="example">
-	<plugin name="molgenis_header" type="plugins.header.MolgenisHeader" />
+
 	<menu name="Main" position="left">
 	
 	<menu name="Classes">
@@ -13,6 +13,32 @@
 	
 	<menu name="Targets">
 		<form name="AllTargets" entity="Target" />
+		<form name="Categories" entity="Category" />
+		<form name="Chromosomes" entity="Chromosome" />
+		<form name="NMRBins" entity="NMRBin" />
+		<form name="Clones" entity="Clone" />
+		<form name="DerivedTraits" entity="DerivedTrait" />
+		<form name="EnvironmentalFactors" entity="EnvironmentalFactor" />
+		<form name="Genes" entity="Gene" />
+		<form name="Transcripts" entity="Transcript" />
+		<form name="Proteins" entity="Protein" />
+		<form name="Metabolites" entity="Metabolite" />
+		<form name="Markers" entity="Marker" />
+		<form name="SNPs" entity="SNP" />
+		<form name="Polymorphisms" entity="Polymorphism" />
+		<form name="Probes" entity="Probe" />
+		<form name="Spots" entity="Spot" />
+		<form name="ProbeSets" entity="ProbeSet" />
+		<form name="MassPeaks" entity="MassPeak" />
+		<form name="Samples" entity="Sample" />
+		<form name="PairedSamples" entity="PairedSample" />
+		<form name="Individuals" entity="Individual" />
+		<form name="Panels" entity="Panel" />
+		<form name="_Protocols" entity="Protocol" />
+		<form name="_SubProtocols" entity="SubProtocol" />
+		<form name="_DataSets" entity="DataSet" />
+		<form name="_OntologyTerms" entity="OntologyTerm" />
+		<form name="_OntologySources" entity="OntologySource" />
 	</menu>
 	
 	<menu name="Features">

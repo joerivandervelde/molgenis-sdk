@@ -1,5 +1,6 @@
 package org.molgenis.example;
 import org.molgenis.util.ApplicationContextProvider;
+import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -21,6 +22,13 @@ import org.molgenis.DatabaseConfig;
 { DatabaseConfig.class , SdkConfig.class})
 public class WebAppConfig extends WebMvcConfigurerAdapter
 {
+	
+	@Bean
+	public ApplicationListener<?> databasePopulator()
+	{
+		return new WebAppDatabasePopulator();
+	}
+	
 	@Override
 	public void configureDefaultServletHandling(DefaultServletHandlerConfigurer configurer)
 	{
