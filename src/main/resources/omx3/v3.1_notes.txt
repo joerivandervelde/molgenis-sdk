@@ -1,0 +1,25 @@
+Protocol = CustomClass
+DataSet = [DELETE/MERGE with Protocol, needs TimeStamp for Observation (?), extends other Protocol]
+DataItem = FlexCol
+ObservedValue = FlexColValue
+Observation = Target (of FlexColValue)
+
+Feature = keep
+Target = keep
+Value = keep
+
+--> keep in mind: time series data support
+
+
+1)
+dataset: "reverse" link in needed!
+e.g. individual: has sample? via 'sample' dataset
+
+2)
+--> special queried fields? ie. 'reverse link v2'
+e.g. "how many samples in this panel", "how many individuals for which there is a DNA sample" etc...
+
+introduce QueriedValue ?
+
+
+
