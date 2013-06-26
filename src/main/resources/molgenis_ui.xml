@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <molgenis name="example">
-	<plugin name="molgenis_header" type="plugins.header.MolgenisHeader" />
+	<!-- plugin name="molgenis_header" type="plugins.header.MolgenisHeader" /-->
 	<menu name="Main" position="left">
 		<form name="Chromosomes" entity="Chromosome">
 			<form name="Genes" entity="Gene" />
