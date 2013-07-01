@@ -33,6 +33,9 @@ b) query via DAS using e.g. @ localhost:8080/das/wormgenes/features?segment=IV:1
 c) customize how the DAS is served from the database by editing
 /molgenis-sdk/src/main/java/services/XgapGenePlugin.java
 
+NOTICE:
+/molgenis-sdk/src/main/java/services/XgapGenePlugin2.java is a second attempt at a more powerful service
+
 
 _____
 
@@ -41,6 +44,13 @@ http://localhost:8080/das/
 http://localhost:8080/das/dsn
 http://localhost:8080/das/demo/features?segment=chrV:500000,800000
 http://localhost:8080/das/wormgenes/features?segment=I:1000,2000000
+
+http://localhost:8080/das/wormgenes2/features?segment=I:1000,2000000
+http://localhost:8080/das/wormgenes2/entry_points
+
+similarly
+http://www.derkholm.net:8080/das/cel_61_220/entry_points
+http://www.derkholm.net:8080/das/cel_61_220/sequence?segment=V
 
 
 
