@@ -111,6 +111,7 @@ public class XgapGenePlugin2 extends AbstractGFFFeatureSource implements
 
 	/**
 	 * Return the names of the chromosomes
+	 * see: http://www.derkholm.net:8080/das/cel_61_220/entry_points
 	 */
 	@Override
 	public Set<String> getEntryPoints() {
