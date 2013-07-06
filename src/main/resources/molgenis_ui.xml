@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<molgenis name="example">
-	<menu name="main">
-		<plugin label="Find variants" name="SearchPlugin" type="plugins.search.SearchPlugin" />
-	</menu>
+<molgenis name="Find GoNL variants">
+	<!-- menu name="main"-->
+		<plugin label="Find GoNL variants" name="SearchPlugin" type="plugins.search.SearchPlugin" />
+	<!--/menu-->
 </molgenis>

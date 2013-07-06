@@ -7,6 +7,7 @@
 
 package plugins.search;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.molgenis.framework.db.Database;
@@ -26,7 +27,28 @@ public class SearchPlugin extends PluginModel {
 		super(name, parent);
 	}
 
+	private Integer start;
+	private Integer stop;
+	private String chrom;
 	private List<Variant> results;
+	private List<String> chromOpts;
+	
+	public List<String> getChromOpts()
+	{
+		return chromOpts;
+	}
+	
+	public Integer getStart() {
+		return start;
+	}
+
+	public Integer getStop() {
+		return stop;
+	}
+
+	public String getChrom() {
+		return chrom;
+	}
 
 	public List<Variant> getResults() {
 		return results;
@@ -46,32 +68,42 @@ public class SearchPlugin extends PluginModel {
 	@Override
 	public void handleRequest(Database db, MolgenisRequest request) {
 		try {
+			
 			if (request.isNull("chrom")) {
 				throw new Exception(
 						"Please enter a chromosome. (1 through 22 or X)");
 			}
+			String chrom = request.getString("chrom");
+			this.chrom = chrom;
+			
 			if (request.isNull("start")) {
 				throw new Exception(
 						"Please enter a start position for your search window. (usually between 0 and 250000000)");
 			}
+			int start = request.getInt("start");
+			this.start = start;
+			
 			if (request.isNull("stop")) {
 				throw new Exception(
 						"Please enter a stop position for your search window. (usually between 0 and 250000000)");
 			}
-
-			String chrom = request.getString("chrom");
-			int start = request.getInt("start");
 			int stop = request.getInt("stop");
-
+			this.stop = stop;
+			
 			if(start < 0 || stop < 0)
 			{
 				throw new Exception("Start/stop position may not be negative");
 			}
 			
+			if(start > stop)
+			{
+				throw new Exception("Start position must come before stop position");
+			}
+			
 			Query<Variant> q = db.query(Variant.class);
+			q.addRules(new QueryRule(Variant.CHROM, Operator.EQUALS, chrom));
 			q.addRules(new QueryRule(Variant.POS, Operator.GREATER_EQUAL, start));
 			q.addRules(new QueryRule(Variant.POS, Operator.LESS_EQUAL, stop));
-			q.addRules(new QueryRule(Variant.CHROM, Operator.EQUALS, chrom));
 			List<Variant> variants = q.find();
 
 			if (variants.size() > 10000) {
@@ -91,7 +123,11 @@ public class SearchPlugin extends PluginModel {
 
 	@Override
 	public void reload(Database db) {
-
+		if(this.chromOpts == null)
+		{
+			List<String> chromOpts = Arrays.asList(new String[]{"1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22","X"});
+			this.chromOpts = chromOpts;
+		}
 	}
 
 	@Override

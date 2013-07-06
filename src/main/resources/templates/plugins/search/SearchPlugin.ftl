@@ -37,29 +37,9 @@
 				<fieldset>
 					<label>Chromosome</label>
 					<select id="chrom" name="chrom">
-						<option value="1">1</option>
-						<option value="2">2</option>
-						<option value="3">3</option>
-						<option value="4">4</option>
-						<option value="5">5</option>
-						<option value="6">6</option>
-						<option value="7">7</option>
-						<option value="8">8</option>
-						<option value="9">9</option>
-						<option value="10">10</option>
-						<option value="11">11</option>
-						<option value="12">12</option>
-						<option value="13">13</option>
-						<option value="14">14</option>
-						<option value="15">15</option>
-						<option value="16">16</option>
-						<option value="17">17</option>
-						<option value="18">18</option>
-						<option value="19">19</option>
-						<option value="20">20</option>
-						<option value="21">21</option>
-						<option value="22">22</option>
-						<option value="X">X</option>
+					<#list screen.chromOpts as chr>
+						<option value="${chr}" <#if screen.chrom?? && screen.chrom == chr>SELECTED</#if>>${chr}</option>
+					</#list>
 					</select>
 				</fieldset>	
 			</div>
@@ -67,14 +47,14 @@
 			<div class="span3">
 				<fieldset>
 					<label>Start bp position</label>
-					<input type="text" id="start" name="start" placeholder="begin of window, from 0">
+					<input type="text" id="start" name="start" <#if screen.start??>value="${screen.start?c}"</#if> placeholder="begin of window, from 0">
 				</fieldset>	
 			</div>
 				
 			<div class="span3">
 				<fieldset>
 					<label>Stop bp position</label>
-					<input type="text" id="stop" name="stop" placeholder="end of window, up to ~250000000">
+					<input type="text" id="stop" name="stop" <#if screen.stop??>value="${screen.stop?c}"</#if> placeholder="end of window, up to ~250000000">
 				</fieldset>
 			</div>
 				
@@ -89,7 +69,7 @@
 	</div>
 </div>
 	
-	<#if screen.results??>
+	<#if screen.results?? && screen.results?size gt 0>
 	
 	<table class="table table-condensed table-striped">
 		 <caption><h2>Results</h2></caption>
