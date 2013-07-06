@@ -1,16 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <molgenis name="example">
-	<plugin name="molgenis_header" type="plugins.header.MolgenisHeader" />
-	<menu name="Main" position="left">
-		<form name="Experiments" entity="Experiment">
-			<menu name="ExperimentMenu" position="top_left">
-				<form name="Samples" entity="Sample" view="list" commands="commands.TestXrefChangeCommand" />
-				<form name="Traits" entity="Trait" view="list" />
-				<form name="Data" entity="Data" />
-				<form name="AggregateData" entity="AggregateData" commands="commands.TestMrefChangeCommand" />
-			</menu>
-		</form>
-		<plugin name="PluginExample" type="plugins.genericwizard.GenericWizard" />
-		<plugin name="EmptyPlugin" type="plugins.empty.EmptyPlugin" />
+	<menu name="main">
+		<plugin label="Find variants" name="SearchPlugin" type="plugins.search.SearchPlugin" />
 	</menu>
 </molgenis>
