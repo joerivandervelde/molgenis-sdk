@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <molgenis name="Find GoNL variants">
-	<!-- menu name="main"-->
+	<plugin name="header" type="plugins.header.MolgenisHeader" />
+	<menu name="main">
 		<plugin label="Find GoNL variants" name="SearchPlugin" type="plugins.search.SearchPlugin" />
-	<!--/menu-->
+	</menu>
 </molgenis>

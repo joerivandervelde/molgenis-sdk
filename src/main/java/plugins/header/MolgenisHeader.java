@@ -11,6 +11,7 @@ import org.molgenis.framework.db.Database;
 import org.molgenis.framework.server.MolgenisRequest;
 import org.molgenis.framework.ui.PluginModel;
 import org.molgenis.framework.ui.ScreenController;
+import org.molgenis.ui.HeaderPlugin;
 
 /**
  * A simple plugin to create the header of the MOLGENIS application. This
@@ -33,15 +34,21 @@ public class MolgenisHeader extends PluginModel
 	}
 
 	@Override
-	public String getViewTemplate()
-	{
-		return "plugins/header/MolgenisHeader.ftl";
+	public String getViewTemplate() {
+		return "templates/" + HeaderPlugin.class.getName().replace('.', '/')
+				+ ".ftl";
 	}
 
 	@Override
 	public void handleRequest(Database db, MolgenisRequest request)
 	{
 		//static
+	}
+	
+	@Override
+	public String getCustomHtmlHeaders()
+	{
+		return "<link rel=\"stylesheet\" href=\"css/gonl-colors.css\" type=\"text/css\">";
 	}
 
 	@Override
