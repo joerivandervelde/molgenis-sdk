@@ -8,7 +8,7 @@
 <div id="header">	
 	<p>
 		<br>
-		&nbsp;<img src="img/logo2.png" />
+		&nbsp;<a href="http://www.genoomvannederland.nl/"><img src="img/logo2.png" /></a>
 		<br>
 	</p>
 </div>
