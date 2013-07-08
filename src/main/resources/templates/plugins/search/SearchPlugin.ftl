@@ -105,4 +105,9 @@
 		</div>
 	</div>
 </form>
+<script>
+$('#Find').click(function(){
+						showSpinner(); // assuming you included molgenis-all.js
+						});
+</script>
 </#macro>
