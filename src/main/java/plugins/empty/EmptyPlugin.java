@@ -16,9 +16,9 @@ import org.molgenis.framework.ui.html.HorizontalRuler;
 import org.molgenis.framework.ui.html.MolgenisForm;
 import org.molgenis.framework.ui.html.Paragraph;
 import org.molgenis.framework.ui.html.Table;
-import org.molgenis.omx.core.CustomClass;
-import org.molgenis.omx.core.FlexCol;
-import org.molgenis.omx.core.FlexColValue;
+import org.molgenis.omx.core.DataItem;
+import org.molgenis.omx.core.ObservedValue;
+import org.molgenis.omx.core.Protocol;
 import org.molgenis.omx.organization.Individual;
 import org.molgenis.omx.values.StringValue;
 
@@ -41,8 +41,8 @@ public class EmptyPlugin extends EasyPluginController<EmptyPlugin>
 		{
 
 			
-			List<CustomClass> ccForIndv = this.getDatabase().find(CustomClass.class, new QueryRule(CustomClass.EXTENDSCLASS_ENTITYCLASSNAME, Operator.EQUALS, "Individual"));
-			ccForIndv.add(new CustomClass()); //for non-custom
+			List<Protocol> ccForIndv = this.getDatabase().find(Protocol.class, new QueryRule(Protocol.EXTENDSCLASS_ENTITYCLASSNAME, Operator.EQUALS, "Individual"));
+			ccForIndv.add(new Protocol()); //for non-custom
 
 			//first show all regular individuals
 //			List<Individual> indvs = this.getDatabase().find(Individual.class, new QueryRule(Individual.CUSTOMCLASS, Operator.EQUALS, ""));
@@ -70,9 +70,9 @@ public class EmptyPlugin extends EasyPluginController<EmptyPlugin>
 			
 			
 			
-			for(CustomClass cc : ccForIndv)
+			for(Protocol cc : ccForIndv)
 			{
-				List<Individual> indvs = this.getDatabase().find(Individual.class, new QueryRule(Individual.CUSTOMCLASS_ENTITYCLASSNAME, Operator.EQUALS, cc.getEntityName()));
+				List<Individual> indvs = this.getDatabase().find(Individual.class, new QueryRule(Individual.PROTOCOL_ENTITYCLASSNAME, Operator.EQUALS, cc.getEntityName()));
 				
 				if(cc.getEntityName() == null)
 				{
@@ -98,8 +98,8 @@ public class EmptyPlugin extends EasyPluginController<EmptyPlugin>
 					data.addColumn(f);
 					colIndexFor.put(f, colCount++);
 				}
-				List<FlexCol> flexCols = this.getDatabase().find(FlexCol.class, new QueryRule(FlexCol.TARGETCLASS_ENTITYCLASSNAME, Operator.EQUALS, cc.getEntityClassName()));
-				for(FlexCol f : flexCols){
+				List<DataItem> flexCols = this.getDatabase().find(DataItem.class, new QueryRule(DataItem.PROTOCOL_ENTITYCLASSNAME, Operator.EQUALS, cc.getEntityClassName()));
+				for(DataItem f : flexCols){
 					data.addColumn(f.getName());
 					colIndexFor.put(f.getName(), colCount++);
 				}
@@ -110,9 +110,9 @@ public class EmptyPlugin extends EasyPluginController<EmptyPlugin>
 					for(String field : i.getFields()){					
 						data.setCell(colIndexFor.get(field), count, (i.get(field)!=null?i.get(field):""));	
 					}
-					for(FlexCol f : flexCols){
+					for(DataItem f : flexCols){
 						
-						FlexColValue value = this.getDatabase().find(FlexColValue.class, new QueryRule(FlexColValue.TARGET_IDENTIFIER, Operator.EQUALS, i.getIdentifier()), new QueryRule(FlexColValue.FLEXCOL_IDENTIFIER, Operator.EQUALS, f.getIdentifier())).get(0);
+						ObservedValue value = this.getDatabase().find(ObservedValue.class, new QueryRule(ObservedValue.TARGET_IDENTIFIER, Operator.EQUALS, i.getIdentifier()), new QueryRule(ObservedValue.DATAITEM_IDENTIFIER, Operator.EQUALS, f.getIdentifier())).get(0);
 					
 						//org.molgenis.omx.observ.value.Value tmp = new org.molgenis.omx.observ.value.Value();
 						//tmp.set(value.getValue().getValues());

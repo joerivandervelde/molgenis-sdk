@@ -28,7 +28,7 @@ public class OMX3_tmp
 		Database database = new org.molgenis.JpaDatabase(
 				Persistence.createEntityManagerFactory(JpaDatabase.DEFAULT_PERSISTENCE_UNIT_NAME));
 	
-		List<Individual> indvs = database.find(Individual.class, new QueryRule(Individual.CUSTOMCLASS_ENTITYCLASSNAME, Operator.EQUALS, null));
+		List<Individual> indvs = database.find(Individual.class, new QueryRule(Individual.PROTOCOL_ENTITYCLASSNAME, Operator.EQUALS, null));
 		System.out.println(indvs.size());
 		
 		database.close();
