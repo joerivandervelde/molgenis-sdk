@@ -2,6 +2,7 @@
 
 <head>
 <script language="javascript" src="http://www.biodalliance.org/js/dalliance-compiled.js"></script>
+<!--
 <script language="javascript">
   new Browser({
     chr:          'IV',
@@ -26,7 +27,32 @@
     forceWidth: 700
   });
 </script>
+ -->
 
+<script language="javascript">
+  new Browser({
+    chr:          'III',
+    viewStart:    48000000,
+    viewEnd:      48700000,
+    cookieKey:    'hsapiens',
+
+    sources:     [{name:                 'cel_61_220',
+                   uri:                  'http://www.derkholm.net:8080/das/cel_61_220',
+                   collapseSuperGroups:  true,
+                   provides_entrypoints: true,
+                   provides_search:      true},
+                   {name:                 'MOLGENIS-DAS',
+                   uri:                  'http://localhost:8080/das/wormgenes2'}],
+
+    searchEndpoint: new DASSource('http://www.derkholm.net:8080/das/cel_61_220/'),
+    browserLinks: {
+        Ensembl: 'http://ncbi36.ensembl.org/Homo_sapiens/Location/View?r=${chr}:${start}-${end}',
+        UCSC: 'http://genome.ucsc.edu/cgi-bin/hgTracks?db=hg18&position=chr${chr}:${start}-${end}',
+    },
+
+    forceWidth: 700
+  });
+</script>
 
 
 </head>
