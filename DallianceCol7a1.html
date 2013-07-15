@@ -1,0 +1,42 @@
+<html>
+
+<head>
+<script language="javascript" src="http://www.biodalliance.org/js/dalliance-compiled.js"></script>
+<script language="javascript">
+  new Browser({
+    chr:          'III',
+    viewStart:    48601506,
+    viewEnd:      48632700,
+    cookieKey:    'human',
+
+    sources:     [{name:                 'Genome',
+                   uri:                  'http://www.derkholm.net:8080/das/hg18comp/',
+                   tier_type:            'sequence',
+                   provides_entrypoints: true},
+                  {name:                 'Genes',     
+                   desc:                 'Gene structures from Ensembl 54',
+                   uri:                  'http://www.derkholm.net:8080/das/hsa_54_36p/',      
+                   collapseSuperGroups:  true,
+                   provides_karyotype:   true,
+                   provides_search:      true},
+                  {name:                 'col7a1 mutations',
+                   uri:                  'http://localhost:8080/das/col7a1'}],
+
+    searchEndpoint: new DASSource('http://www.derkholm.net:8080/das/hsa_54_36p/'),
+    browserLinks: {
+        Ensembl: 'http://ncbi36.ensembl.org/Homo_sapiens/Location/View?r=${chr}:${start}-${end}',
+        UCSC: 'http://genome.ucsc.edu/cgi-bin/hgTracks?db=hg18&position=chr${chr}:${start}-${end}',
+    }
+  
+  });
+</script>
+
+
+</head>
+<body>
+
+<div id="svgHolder"></div>
+
+</body>
+
+</html>

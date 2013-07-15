@@ -24,6 +24,17 @@ public class ImportGenes
 	 */
 	public static void main(String[] args) throws DatabaseException, IOException
 	{
+		String elegansChromosomes = "src/main/resources/elegans_chromosomes.tsv";
+		String elegansGenes = "src/main/resources/elegans_genes.tsv";
+		
+		String col7a1Chromosomes = "src/main/resources/col7a1_chromosomes.tsv";
+		String col7a1Genes = "src/main/resources/col7a1_das.tsv";
+		
+		//importGenes(elegansChromosomes, elegansGenes);
+		importGenes(col7a1Chromosomes, col7a1Genes);
+	}
+	
+	private static void importGenes(String chromosomesFile, String genesFile) throws DatabaseException, IOException{
 		System.out.println("preparing..");
 		
 		Database db = new org.molgenis.JpaDatabase(
@@ -32,23 +43,19 @@ public class ImportGenes
 		
 		System.out.println("starting import of chromosomes..");
 		
-		//File chromos = new File("src/main/resources/elegans_chromosomes.tsv");
-/**		File chromos = new File("/Users/pdopheide/Desktop/col7a1_chromosomes.tsv");
+		File chromos = new File(chromosomesFile);
 		CsvReader csvReader = new CsvReader(chromos, '\t', true);
 		entitiesImporter.importEntities(csvReader, "Chromosome", DatabaseAction.ADD);
 		csvReader.close();
-*/		
+		
 		System.out.println("..done, starting import of genes..");
 		
-		//File genes = new File("src/main/resources/elegans_genes.tsv");
-		File genes = new File("/Users/pdopheide/Desktop/col7a1_genes.tsv");
-/**		csvReader = new CsvReader(genes, '\t', true); */
-		CsvReader csvReader = new CsvReader(genes, '\t', true);
+		File genes = new File(genesFile);
+		csvReader = new CsvReader(genes, '\t', true);
 		entitiesImporter.importEntities(csvReader, "Gene", DatabaseAction.ADD);
 		csvReader.close();
 	
 		System.out.println("..done");
-		
 	}
 
 }
