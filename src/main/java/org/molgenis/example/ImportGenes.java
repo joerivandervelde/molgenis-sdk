@@ -30,8 +30,12 @@ public class ImportGenes
 		String col7a1Chromosomes = "src/main/resources/col7a1_chromosomes.tsv";
 		String col7a1Genes = "src/main/resources/col7a1_das.tsv";
 		
+		String chd7Chromosomes = "src/main/resources/CHD7-chromosomes.tsv";
+		String chd7Genes = "src/main/resources/CHD7-mutations_v2.tsv";
+		
 		//importGenes(elegansChromosomes, elegansGenes);
 		importGenes(col7a1Chromosomes, col7a1Genes);
+		importGenes(chd7Chromosomes, chd7Genes);
 	}
 	
 	private static void importGenes(String chromosomesFile, String genesFile) throws DatabaseException, IOException{

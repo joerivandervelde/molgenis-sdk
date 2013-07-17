@@ -34,7 +34,7 @@ import org.molgenis.xgap.Gene;
  * @author jvelde
  * 
  */
-public class XgapGenePlugin2Col7a1 extends AbstractGFFFeatureSource implements
+public class XgapGenePlugin2Chd7 extends AbstractGFFFeatureSource implements
 		DazzleReferenceSource {
 
 	Database db;
@@ -177,8 +177,8 @@ public class XgapGenePlugin2Col7a1 extends AbstractGFFFeatureSource implements
 
 			for (Gene g : genes) {
 				GFFFeature gff = new GFFFeature();
-				gff.setLink("http://www.deb-central.org/molgenis.do?__target=SearchPlugin&__action=showMutation&mid="
-						+ g.getName() + "#results");
+				//gff.setLink("http://www.deb-central.org/molgenis.do?__target=SearchPlugin&__action=showMutation&mid="
+				//		+ g.getName() + "#results");
 				gff.setType("mutation");
 				gff.setTypeId(g.getSeq());
 				gff.setMethod(g.getSymbol());
