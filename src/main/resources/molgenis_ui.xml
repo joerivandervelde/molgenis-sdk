@@ -7,5 +7,6 @@
 		</form>
 		<plugin name="PluginExample" type="plugins.genericwizard.GenericWizard" />
 		<plugin name="EmptyPlugin" type="plugins.empty.EmptyPlugin" />
+		<plugin name="MutationPlugin" type="plugins.mutation.MutationPlugin" />
 	</menu>
 </molgenis>
