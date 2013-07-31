@@ -468,6 +468,7 @@ BigWig.prototype.readChromTree = function(callback) {
     var thisB = this;
     this.chromsToIDs = {};
     this.idsToChroms = {};
+    this.maxID = 0;
 
     var udo = this.unzoomedDataOffset;
     while ((udo % 4) != 0) {
@@ -485,12 +486,12 @@ BigWig.prototype.readChromTree = function(callback) {
         var itemCount = (la[4] << 32) | (la[5]);
         var rootNodeOffset = 32;
         
-        // dlog('blockSize=' + blockSize + '    keySize=' + keySize + '   valSize=' + valSize + '    itemCount=' + itemCount);
+        // console.log('blockSize=' + blockSize + '    keySize=' + keySize + '   valSize=' + valSize + '    itemCount=' + itemCount);
 
         var bptReadNode = function(offset) {
             var nodeType = ba[offset];
             var cnt = sa[(offset/2) + 1];
-            // dlog('ReadNode: ' + offset + '     type=' + nodeType + '   count=' + cnt);
+            // console.log('ReadNode: ' + offset + '     type=' + nodeType + '   count=' + cnt);
             offset += 4;
             for (var n = 0; n < cnt; ++n) {
                 if (nodeType == 0) {
@@ -511,12 +512,13 @@ BigWig.prototype.readChromTree = function(callback) {
                     var chromSize = (ba[offset + 7]<<24) | (ba[offset+6]<<16) | (ba[offset+5]<<8) | (ba[offset+4]);
                     offset += 8;
 
-                    // dlog(key + ':' + chromId + ',' + chromSize);
+                    // console.log(key + ':' + chromId + ',' + chromSize);
                     thisB.chromsToIDs[key] = chromId;
                     if (key.indexOf('chr') == 0) {
                         thisB.chromsToIDs[key.substr(3)] = chromId;
                     }
                     thisB.idsToChroms[chromId] = key;
+                    thisB.maxID = Math.max(thisB.maxID, chromId);
                 }
             }
         };
@@ -572,12 +574,12 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
         var maxCirBlockSpan = 4 +  (thisB.cirBlockSize * 32);   // Upper bound on size, based on a completely full leaf node.
         var spans;
         for (var i = 0; i < offset.length; ++i) {
-            var blockSpan = new Range(offset[i], Math.min(offset[i] + maxCirBlockSpan, thisB.cirTreeOffset + thisB.cirTreeLength));
+            var blockSpan = new Range(offset[i], offset[i] + maxCirBlockSpan);
             spans = spans ? union(spans, blockSpan) : blockSpan;
         }
         
         var fetchRanges = spans.ranges();
-        // dlog('fetchRanges: ' + fetchRanges);
+        // console.log('fetchRanges: ' + fetchRanges);
         for (var r = 0; r < fetchRanges.length; ++r) {
             var fr = fetchRanges[r];
             cirFobStartFetch(offset, fr, level);
@@ -586,7 +588,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
 
     var cirFobStartFetch = function(offset, fr, level, attempts) {
         var length = fr.max() - fr.min();
-        // dlog('fetching ' + fr.min() + '-' + fr.max() + ' (' + (fr.max() - fr.min()) + ')');
+        // console.log('fetching ' + fr.min() + '-' + fr.max() + ' (' + (fr.max() - fr.min()) + ')');
         thisB.bwg.data.slice(fr.min(), fr.max() - fr.min()).fetch(function(resultBuffer) {
             for (var i = 0; i < offset.length; ++i) {
                 if (fr.contains(offset[i])) {
@@ -711,7 +713,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                 var sumSqData = fa[(i*8)+7];
                                 
                                 if (chromId == chr) {
-                                    var summaryOpts = {type: 'bigwig', score: sumData/validCnt};
+                                    var summaryOpts = {type: 'bigwig', score: sumData/validCnt, maxScore: maxVal};
                                     if (thisB.bwg.type == 'bigbed') {
                                         summaryOpts.type = 'density';
                                     }
@@ -1282,7 +1284,7 @@ BigWig.prototype.getUnzoomedView = function() {
 BigWig.prototype.getZoomedView = function(z) {
     var zh = this.zoomLevels[z];
     if (!zh.view) {
-        zh.view = new BigWigView(this, zh.indexOffset, this.zoomLevels[z + 1].dataOffset - zh.indexOffset, true);
+        zh.view = new BigWigView(this, zh.indexOffset, /* this.zoomLevels[z + 1].dataOffset - zh.indexOffset */ 4000, true);
     }
     return zh.view;
 }
@@ -1349,6 +1351,62 @@ function makeBwg(data, callback, name) {
             return callback(bwg);
         });
     });
+}
+
+
+BigWig.prototype.thresholdSearch = function(chrName, referencePoint, dir, threshold, callback) {
+    dir = (dir<0) ? -1 : 1;
+    var bwg = this;
+    var initialChr = this.chromsToIDs[chrName];
+    var candidates = [{chrOrd: 0, chr: initialChr, zoom: bwg.zoomLevels.length - 4, min: 0, max: 300000000, fromRef: true}]
+    for (var i = 1; i <= this.maxID + 1; ++i) {
+        var chrId = (initialChr + (dir*i)) % (this.maxID + 1);
+        if (chrId < 0) 
+            chrId += (this.maxID + 1);
+        candidates.push({chrOrd: i, chr: chrId, zoom: bwg.zoomLevels.length - 4, min: 0, max: 300000000})
+    }
+       
+    function fbThresholdSearchRecur() {
+	if (candidates.length == 0) {
+	    return callback(null);
+	}
+	candidates.sort(function(c1, c2) {
+	    var d = c1.zoom - c2.zoom;
+	    if (d != 0)
+		return d;
+
+            d = c1.chrOrd - c2.chrOrd;
+            if (d != 0)
+                return d;
+	    else
+		return c1.min - c2.min * dir;
+	});
+
+	var candidate = candidates.splice(0, 1)[0];
+        // console.log('trying ' + miniJSONify(candidate));
+
+        bwg.getZoomedView(candidate.zoom).readWigDataById(candidate.chr, candidate.min, candidate.max, function(feats) {
+            var rp = 0;
+            if (candidate.fromRef)
+                rp = referencePoint;
+            
+            for (var fi = 0; fi < feats.length; ++fi) {
+	        var f = feats[fi];
+                
+	        if (f.maxScore > threshold) {
+		    if (candidate.zoom == 0) {
+		        if (f.min > rp)
+			    return callback(f);
+		    } else if (f.max > rp) {
+		        candidates.push({chr: candidate.chr, chrOrd: candidate.chrOrd, zoom: candidate.zoom - 1, min: f.min, max: f.max, fromRef: candidate.fromRef});
+		    }
+	        }
+	    }
+            fbThresholdSearchRecur();
+        });
+    }
+    
+    fbThresholdSearchRecur();
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -1435,7 +1493,7 @@ URLFetchable.prototype.fetch = function(callback, attempt, truncatedLength) {
     req.open('GET', url, true);
     req.overrideMimeType('text/plain; charset=x-user-defined');
     if (this.end) {
-        // dlog('req bytes=' + this.start + '-' + this.end);
+        // console.log('req bytes=' + this.start + '-' + this.end);
         req.setRequestHeader('Range', 'bytes=' + this.start + '-' + this.end);
         length = this.end - this.start + 1;
     }
@@ -1567,7 +1625,7 @@ function Browser(opts) {
 
     // Visual config.
 
-    this.tierBackgroundColors = ['white'];
+    this.tierBackgroundColors = [ /* "rgb(245,245,245)", "rgb(230,230,250)"  */ 'white'];
     this.minTierHeight = 25;
 
     this.browserLinks = {
@@ -1653,7 +1711,6 @@ Browser.prototype.realInit = function() {
         thisB.move(delta);
     }, false);
     this.tierHolder.addEventListener('MozMousePixelScroll', function(ev) {
-        console.log('mps');
         if (ev.axis == 1) {
             ev.stopPropagation(); ev.preventDefault();
 
@@ -1856,7 +1913,7 @@ Browser.prototype.realInit = function() {
                 }
             }
         } else {
-            console.log('key: ' + ev.keyCode + '; char: ' + ev.charCode);
+            // console.log('key: ' + ev.keyCode + '; char: ' + ev.charCode);
         }
     };
     var keyUpHandler = function(ev) {
@@ -1979,11 +2036,11 @@ Browser.prototype.touchCancelHandler = function(ev) {
 
 
 Browser.prototype.makeTier = function(source) {
-    //try {
+    try {
         this.realMakeTier(source);
-    //} catch (e) {
-    //    console.log(e);
-    //}
+    } catch (e) {
+        console.log(e.stack);
+    }
 }
 
 Browser.prototype.realMakeTier = function(source) {
@@ -2313,12 +2370,6 @@ Browser.prototype.realMakeTier = function(source) {
         document.addEventListener('mouseup', labelReleaseHandler, false);
     }, false);
 
-
-/*    tier.label.addEventListener('touchstart', function(ev) {
-        console.log('touchStartInLabel');
-        ev.stopPropagation(); ev.preventDefault();
-    }, false); */
-
     this.tierHolder.appendChild(row);    
     this.tiers.push(tier);  // NB this currently tells any extant knownSpace about the new tier.
     
@@ -2495,8 +2546,6 @@ Browser.prototype.zoomStep = function(delta) {
         nz = this.zoomMax;
     }
 
-    // console.log('zoom ' + oz + ' -> ' + nz);
-
     if (nz != oz) {
         this.zoomSliderValue = nz; // FIXME maybe ought to set inside zoom!
         this.zoom(Math.exp((1.0 * nz) / this.zoomExpt));
@@ -2591,10 +2640,14 @@ Browser.prototype.resizeViewer = function(skipRefresh) {
 Browser.prototype.addTier = function(conf) {
     this.sources.push(conf);
     this.makeTier(conf);
+    this.notifyTier();
 }
 
 Browser.prototype.removeTier = function(conf) {
     var target = -1;
+
+    // FIXME can this be done in a way that doesn't need changing every time we add
+    // new datasource types.
 
     if (typeof conf.index !== 'undefined' && conf.index >=0 && conf.index < this.tiers.length) {
         target = conf.index;
@@ -2606,7 +2659,9 @@ Browser.prototype.removeTier = function(conf) {
                 (conf.bamURI && ts.bamURI === conf.bamURI) ||
                 (conf.twoBitURI && ts.twoBitURI === conf.twoBitURI))
             {
-                target = ti; break;
+                 if (ts.stylesheet_uri == conf.stylesheet_uri) {
+                    target = ti; break;
+                }
             }
         }
     }
@@ -2623,7 +2678,8 @@ Browser.prototype.removeTier = function(conf) {
     for (var ti = target; ti < this.tiers.length; ++ti) {
         this.tiers[ti].background = this.tierBackgroundColors[ti % this.tierBackgroundColors.length];
     }
-    // this.refresh();
+    
+    this.notifyTier();
 }
 
 
@@ -2653,9 +2709,22 @@ Browser.prototype.setLocation = function(newChr, newMin, newMax, callback) {
 
         ss.getSeqInfo(newChr, function(si) {
             if (!si) {
-                callback("Couldn't find sequence '" + newChr + "'");
+                var altChr;
+                if (newChr.indexOf('chr') == 0) {
+                    altChr = newChr.substr(3);
+                } else {
+                    altChr = 'chr' + newChr;
+                }
+                ss.getSeqInfo(altChr, function(si2) {
+                    if (!si2) {
+                        return callback("Couldn't find sequence '" + newChr + "'");
+                    } else {
+                        return thisB._setLocation(altChr, newMin, newMax, si2, callback);
+                    }
+                });
+            } else {
+                return thisB._setLocation(newChr, newMin, newMax, si, callback);
             }
-            return thisB._setLocation(newChr, newMin, newMax, si, callback);
         });
     }
 }
@@ -2663,6 +2732,9 @@ Browser.prototype.setLocation = function(newChr, newMin, newMax, callback) {
 
 Browser.prototype._setLocation = function(newChr, newMin, newMax, newChrInfo, callback) {
     if (newChr) {
+        if (newChr.indexOf('chr') == 0)
+            newChr = newChr.substring(3);
+
         this.chr = newChr;
         this.currentSeqMax = newChrInfo.length;
     }
@@ -2714,7 +2786,7 @@ Browser.prototype.notifyFeature = function(ev, feature, group) {
       try {
           this.featureListeners[fli](ev, feature, group);
       } catch (ex) {
-          console.log(ex);
+          console.log(ex.stack);
       }
   }
 }
@@ -2729,7 +2801,7 @@ Browser.prototype.notifyFeatureHover = function(ev, feature, group) {
         try {
             this.featureHoverListeners[fli](ev, feature, group);
         } catch (ex) {
-            console.log(ex);
+            console.log(ex.stack);
         }
     }
 }
@@ -2744,7 +2816,7 @@ Browser.prototype.notifyLocation = function() {
         try {
             this.viewListeners[lli](this.chr, this.viewStart|0, this.viewEnd|0, this.zoomSliderValue);
         } catch (ex) {
-            console.log(ex);
+            console.log(ex.stack);
         }
     }
 }
@@ -2758,7 +2830,7 @@ Browser.prototype.notifyTier = function() {
         try {
             this.tierListeners[tli]();
         } catch (ex) {
-            console.log(ex);
+            console.log(ex.stack);
         }
     }
 }
@@ -2772,7 +2844,7 @@ Browser.prototype.notifyRegionSelect = function(chr, min, max) {
         try {
             this.regionSelectListeners[rli](chr, min, max);
         } catch (ex) {
-            console.log(ex);
+            console.log(ex.stack);
         }
     }
 }
@@ -2837,7 +2909,7 @@ Browser.prototype.notifyTierSelectionWrap = function(i) {
         try {
             this.tierSelectionWrapListeners[fli](i);
         } catch (ex) {
-            console.log(ex);
+            console.log(ex.stack);
         }
     }
 }
@@ -4240,7 +4312,8 @@ function drawFeatureTier(tier)
                     continue;
                 }
                 var g = glyphForFeature(f, 0, tier.styleForFeature(f), tier);
-                glyphs.push(g);
+		if (g)
+                    glyphs.push(g);
             }
         }
     }
@@ -4532,6 +4605,9 @@ function glyphsForGroup(features, y, groupElement, tier, connectorType) {
 	    glyphs.push(g);
 	}
     }
+
+    if (glyphs.length == 0)
+	return null;
     
     var connector = 'flat';
     if (tier.dasSource.collapseSuperGroups && !tier.bumped) {
@@ -4709,6 +4785,7 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 	var smax = tier.dasSource.forceMax || style.MAX || tier.currentFeaturesMaxScore || 10;
 	var yscale = ((1.0 * height) / (smax - smin));
 	var sc = ((score - (1.0*smin)) * yscale)|0;
+	quant = {min: smin, max: smax};
 	gg = new PointGlyph((minPos + maxPos)/2, height-sc, height);
     } else if (gtype === '__SEQUENCE') {
 	var refSeq = null;
@@ -4720,6 +4797,8 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 	    }
 	}
 	gg = new SequenceGlyph(minPos, maxPos, height, feature.seq, refSeq);
+    } else if (gtype === '__NONE') {
+	return null;
     } else /* default to BOX */ {
 	var stroke = style.FGCOLOR || null;
 	var fill = feature.override_color || style.BGCOLOR || style.COLOR1 || 'green';
@@ -4832,7 +4911,7 @@ function makeLineGlyph(features, style, tier) {
 // sequence-draw.js: renderers for sequence-related data
 //
 
-var MIN_TILE = 75;
+var MIN_TILE = 100;
 var rulerTileColors = ['black', 'white'];
 var baseColors = {A: 'green', C: 'blue', G: 'black', T: 'red'};
 var steps = [1,2,5];
@@ -4910,7 +4989,7 @@ function drawSeqTier(tier, seq)
 			  3);
 
 	    gc.fillStyle = 'black';
-	    gc.fillText('' + pos, ((pos - origin) * scale), 22);
+	    gc.fillText(formatLongInt(pos), ((pos - origin) * scale), 22);
 	    
 
 	    pos += tile;
@@ -5559,8 +5638,13 @@ KnownSpace.prototype.startFetchesForTiers = function(tiers) {
     var needSeq = false;
 
     for (var t = 0; t < tiers.length; ++t) {
-        if (this.startFetchesFor(tiers[t], awaitedSeq)) {
-            needSeq = true;
+        try {
+            if (this.startFetchesFor(tiers[t], awaitedSeq)) {
+                needSeq = true;
+            }
+        } catch (ex) {
+            console.log('Error fetching tier source');
+            console.log(ex.stack);
         }
     }
 
@@ -7277,8 +7361,11 @@ function DasTier(browser, source, viewport, holder, overlay, placard, placardCon
                     }
                 });
         };
+        this.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
+            fs.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, callback);
+        };
 
-        if (!this.dasSource.uri && !this.dasSource.stylesheet_uri) {
+        if (!this.dasSource.uri && !this.dasSource.stylesheet_uri && !this.dasSource.style) {
             fs.bwgHolder.await(function(bwg) {
                 if (!bwg) {
                     // Dummy version so that an error placard gets shown.
@@ -7609,59 +7696,67 @@ DasTier.prototype.sourceFindNextFeature = function(chr, pos, dir, callback) {
     callback(null);
 }
 
+DasTier.prototype.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
+    callback(null);
+}
+
 DasTier.prototype.findNextFeature = function(chr, pos, dir, fedge, callback) {
-    if (this.knownStart && pos >= this.knownStart && pos <= this.knownEnd) {
-        if (this.currentFeatures) {
-            var bestFeature = null;
-            for (var fi = 0; fi < this.currentFeatures.length; ++fi) {
-                var f = this.currentFeatures[fi];
-                if (!f.min || !f.max) {
-                    continue;
+    if (this.dasSource.quantLeapThreshold) {
+        this.quantFindNextFeature(chr, pos, dir, this.dasSource.quantLeapThreshold, callback);
+    } else {
+        if (this.knownStart && pos >= this.knownStart && pos <= this.knownEnd) {
+            if (this.currentFeatures) {
+                var bestFeature = null;
+                for (var fi = 0; fi < this.currentFeatures.length; ++fi) {
+                    var f = this.currentFeatures[fi];
+                    if (!f.min || !f.max) {
+                        continue;
+                    }
+                    if (f.parents && f.parents.length > 0) {
+                        continue;
+                    }
+                    if (dir < 0) {
+                        if (fedge == 1 && f.max >= pos && f.min < pos) {
+                            if (!bestFeature || f.min > bestFeature.min ||
+                                (f.min == bestFeature.min && f.max < bestFeature.max)) {
+                                bestFeature = f;
+                            }
+                        } else if (f.max < pos) {
+                            if (!bestFeature || f.max > bestFeature.max || 
+                                (f.max == bestFeature.max && f.min < bestFeature.min) ||
+                                (f.min == bestFeature.mmin && bestFeature.max >= pos)) {
+                                bestFeature = f;
+                            } 
+                        }
+                    } else {
+                        if (fedge == 1 && f.min <= pos && f.max > pos) {
+                            if (!bestFeature || f.max < bestFeature.max ||
+                                (f.max == bestFeature.max && f.min > bestFeature.min)) {
+                                bestFeature = f;
+                            }
+                        } else if (f.min > pos) {
+                            if (!bestFeature || f.min < bestFeature.min ||
+                                (f.min == bestFeature.min && f.max > bestFeature.max) ||
+                                (f.max == bestFeature.max && bestFeature.min <= pos)) {
+                                bestFeature = f;
+                            }
+                        }
+                    }
                 }
-                if (f.parents && f.parents.length > 0) {
-                    continue;
+                if (bestFeature) {
+                    //                dlog('bestFeature = ' + miniJSONify(bestFeature));
+                    return callback(bestFeature);
                 }
                 if (dir < 0) {
-                    if (fedge == 1 && f.max >= pos && f.min < pos) {
-                        if (!bestFeature || f.min > bestFeature.min ||
-                            (f.min == bestFeature.min && f.max < bestFeature.max)) {
-                            bestFeature = f;
-                        }
-                    } else if (f.max < pos) {
-                        if (!bestFeature || f.max > bestFeature.max || 
-                            (f.max == bestFeature.max && f.min < bestFeature.min) ||
-                            (f.min == bestFeature.mmin && bestFeature.max >= pos)) {
-                            bestFeature = f;
-                        } 
-                    }
+                    pos = this.knownStart;
                 } else {
-                    if (fedge == 1 && f.min <= pos && f.max > pos) {
-                        if (!bestFeature || f.max < bestFeature.max ||
-                            (f.max == bestFeature.max && f.min > bestFeature.min)) {
-                            bestFeature = f;
-                        }
-                    } else if (f.min > pos) {
-                        if (!bestFeature || f.min < bestFeature.min ||
-                            (f.min == bestFeature.min && f.max > bestFeature.max) ||
-                            (f.max == bestFeature.max && bestFeature.min <= pos)) {
-                            bestFeature = f;
-                        }
-                    }
+                    pos = this.knownEnd;
                 }
             }
-            if (bestFeature) {
-//                dlog('bestFeature = ' + miniJSONify(bestFeature));
-                return callback(bestFeature);
-            }
-            if (dir < 0) {
-                pos = this.knownStart;
-            } else {
-                pos = this.knownEnd;
-            }
         }
+
+        this.sourceFindNextFeature(chr, pos, dir, callback);
     }
-//    dlog('delegating to source: ' + pos);
-    this.sourceFindNextFeature(chr, pos, dir, callback);
 }
 
 
@@ -7776,7 +7871,6 @@ Browser.prototype.showTrackAdder = function(ev) {
             var mapButton = thisB.makeButton(thisB.chains[mm].srcTag, 'Browse datasources mapped from ' + thisB.chains[mm].srcTag);
             addModeButtons.push(mapButton);
             mapButton.addEventListener('click', function(ev) {
-            	alert('hello world');
                 ev.preventDefault(); ev.stopPropagation();
                 activateButton(addModeButtons, mapButton);
                 makeStab(thisB.mappableSources[mm], mm);
@@ -8433,7 +8527,7 @@ TwoBitSeq.prototype.init = function(cnt) {
             return cnt('Fetch failed');
         }
         var ba = new Uint8Array(r1);
-        thisB.length = readInt(ba, 0);
+        thisB._length = readInt(ba, 0);
         thisB.nBlockCnt = readInt(ba, 4);
         thisB.tbf.data.slice(thisB.offset + 8, thisB.nBlockCnt*8 + 4).fetch(function(r2) {
             if (!r2) {
@@ -8453,7 +8547,7 @@ TwoBitSeq.prototype.init = function(cnt) {
             }
             thisB.nBlocks = nbs;
             thisB.mBlockCnt = readInt(ba, thisB.nBlockCnt*8);
-            thisB.seqLength = ((thisB.length + 3)/4)|0;
+            thisB.seqLength = ((thisB._length + 3)/4)|0;
             thisB.seqOffset = thisB.offset + 16 + ((thisB.nBlockCnt + thisB.mBlockCnt) * 8);
             return cnt();
         });
@@ -8540,7 +8634,7 @@ TwoBitSeq.prototype.length = function(cnt) {
         if (error) {
             return cnt(null, error);
         } else {
-            return cnt(thisB.length);
+            return cnt(thisB._length);
         }
     });
 }
@@ -8887,7 +8981,7 @@ var VERSION = {
     CONFIG: 3,
     MAJOR:  0,
     MINOR:  8,
-    MICRO:  3,
+    MICRO:  6,
     PATCH:  '',
     BRANCH: 'dev'
 }
@@ -8915,6 +9009,17 @@ function formatLongInt(n) {
     return (n|0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
 
+function parseLocCardinal(n, m) {
+    var i = n.replace(/,/g, '');
+    if (m === 'k' || m === 'K') {
+        return i * 1000;
+    } else if (m == 'm' || m === 'M') {
+        return i * 1000000;
+    } else {
+        return i;
+    }
+}
+
 /*
  * Quite a bit of this ought to be done using a templating system, but
  * since web-components isn't quite ready for prime time yet we'll stick
@@ -8927,51 +9032,37 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/dalliance-scoped.css'}));
 
     var b = this;
-    var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):(\d+)([\-,\,.](\d+))?/;
+    var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):([0-9,]+)([KkMmGg])?([\-,\,.]+([0-9,]+)([KkMmGg])?)?/;
+    // var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):([0-9,]+)([\-,\,.]+([0-9,]+))?/;
 
-    this.addFeatureListener(function(ev, hit) {
-        
-        b.featurePopup(ev, hit, null);
-        
-        // P. Dopheide
-        // added code to function
-        if(hit.typeId == "mutation"){ // could also use hit.type?
-        	//var data = {
-        	//	'id' : hit.id,
-        	//};
-			
-//	       $.post('http://localhost:8080/mutation?hit=' + hit.id, function(data) {
-//  				console.log(data + 'what up!!');
-//			});
-       		//alert('I only appear when you click a mutation! :-)');
-       		//informationTable(hit);
-       		
-			
-			var url = 'http://localhost:8080/mutation?hit=' + hit.id
-			console.log(url);
-			$.ajax({
-			    url: url,
-			    type: "GET",
-			    dataType: "json",
-			    success: function(data) {
-			    	console.log("Data returned : " + data);
+    if (!b.disableDefaultFeaturePopup) {
+        this.addFeatureListener(function(ev, hit) {
+            b.featurePopup(ev, hit, null);
+            
+			// P. Dopheide
+			// added code to function
+			if(hit.typeId == "mutation"){ // could also use hit.type?
+				var url = 'http://localhost:8080/mutation?hit=' + hit.id
+				console.log(url);
+				$.ajax({
+					url: url,
+					type: "GET",
+					dataType: "json",
+					success: function(data) {
+					console.log("Data returned : " + data);
 					
-        			if (typeof data == 'object') {
-						// does something need to go here?
-						//alert(data.msg);
+					if (typeof data == 'object') {
 						informationTable(data);
-	            	}
-					
-	        		},
-	    		error: function(jqXHR, textStatus, errorThrown) {
-    	    		console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
-    	    	}
-    	    	
-    		});
-       		
-       		//alert($.get());
-        }
-    });
+					}
+				
+				},
+					error: function(jqXHR, textStatus, errorThrown) {
+						console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
+					}
+				});
+			}
+        });
+    }
 
     holder.classList.add('dalliance');
     var toolbar = makeElement('div', null, {className: 'btn-toolbar'});
@@ -8986,11 +9077,12 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     }
 
     var locField = makeElement('input', '', {className: 'loc-field'});
+    b.makeTooltip(locField, 'Enter a genomic location or gene name');
     var locStatusField = makeElement('p', '', {className: 'loc-status'});
     toolbar.appendChild(makeElement('div', [locField, locStatusField], {className: 'btn-group'}, {verticalAlign: 'top', marginLeft: '10px', marginRight: '5px'}));
 
     var zoomInBtn = makeElement('a', [makeElement('i', null, {className: 'icon-zoom-in'})], {className: 'btn'});
-    var zoomSlider = makeElement('input', '', {type: 'range', min: 100, max: 250}, {width: '200px'});
+    var zoomSlider = makeElement('input', '', {type: 'range', min: 100, max: 250}, {width: '200px'});  // NB min and max get overwritten.
     var zoomOutBtn = makeElement('a', [makeElement('i', null, {className: 'icon-zoom-out'})], {className: 'btn'});
     toolbar.appendChild(makeElement('div', [zoomInBtn,
                                             makeElement('span', zoomSlider, {className: 'btn'}),
@@ -9019,6 +9111,12 @@ Browser.prototype.initUI = function(holder, genomePanel) {
         }
     });
 
+    this.addTierListener(function() {
+        if (b.storeStatus) {
+            b.storeStatus();
+        }
+    });
+
     locField.addEventListener('keydown', function(ev) {
         if (ev.keyCode == 40) {
             ev.preventDefault(); ev.stopPropagation();
@@ -9028,6 +9126,7 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 
             var g = locField.value;
             var m = REGION_PATTERN.exec(g);
+            // console.log(m);
 
             var setLocationCB = function(err) {
                     if (err) {
@@ -9038,14 +9137,12 @@ Browser.prototype.initUI = function(holder, genomePanel) {
                 };
 
             if (m) {
-                console.log(m);
                 var chr = m[1], start, end;
-                if (m[4]) {
-                    start = m[2]|0;
-                    end = m[4]|0;
+                if (m[5]) {
+                    start = parseLocCardinal(m[2],  m[3]);
+                    end = parseLocCardinal(m[5], m[6]);
                 } else {
                     var width = b.viewEnd - b.viewStart + 1;
-                    start = ((m[2]|0) - (width/2))|0;
                     end = start + width - 1;
                 }
                 b.setLocation(chr, start, end, setLocationCB);

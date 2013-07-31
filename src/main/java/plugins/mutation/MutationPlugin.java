@@ -58,7 +58,6 @@ public class MutationPlugin extends PluginModel
 	// adding custom content to the html <header>
 	@Override
 	public String getCustomHtmlHeaders(){
-		//return "<script language=\"javascript\" src=\"js/dalliance-all.js\"></script><script language=\"javascript\" src=\"js/BioDallianceGenomeBrowser.js\"></script>";
 		return "<script language=\"javascript\" src=\"js/dalliance-all.js\"></script><script language=\"javascript\" src=\"js/BioDallianceGenomeBrowser.js\"></script><script language=\"javascript\" src=\"js/InformationTable.js\"></script>";
 	}
 	

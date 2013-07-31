@@ -14,7 +14,7 @@ import org.molgenis.framework.server.MolgenisContext;
 import org.molgenis.framework.server.MolgenisRequest;
 import org.molgenis.framework.server.MolgenisResponse;
 import org.molgenis.framework.server.MolgenisService;
-import org.molgenis.xgap.Gene;
+import org.molgenis.xgap.Patient;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -43,44 +43,38 @@ public class MutationService implements MolgenisService
 			throws ParseException, DatabaseException, IOException {
 		Database db = request.getDatabase();
 		this.db = db;
-		List<Gene> result = null;
+		List<Patient> result = null;
 		
 		// get id and process data
 		if(request.get("hit").toString() != ""){
 			String[] id = request.get("hit").toString().split("_");
-			String start = id[id.length - 2]; // get second to last element
-			String end = id[id.length - 1]; // get last element
 			String mId = id[id.length - 3];
-//			System.out.println("start: " + start);
-//			System.out.println("end: " + end);
-//			System.out.println("id: " + mId);
+			System.out.println("mutation id: " + mId); // used for debugging, testing, etc.
 		
-			Query q = db.query(Gene.class);
-			q.addRules(new QueryRule(Gene.BPSTART, Operator.GREATER_EQUAL, start), new QueryRule(Gene.BPEND, Operator.LESS_EQUAL, end));
+			Query q = db.query(Patient.class);
+			q.addRules(new QueryRule(Patient.MUTATION1, Operator.EQUALS, mId));
+			q.addRules(new QueryRule(Operator.OR));
+			q.addRules(new QueryRule(Patient.MUTATION2, Operator.EQUALS, mId));
 			result = q.find();
 		}else{
-			Query q = db.query(Gene.class);
+			Query q = db.query(Patient.class);
 			result = q.find();
 		}
 		
-//		List<Gene> result2 = db.find(Gene.class, new QueryRule(Gene.NAME, Operator.EQUALS, "mijn favoriete gen"));
-		
 		JsonObject jsonObject = new JsonObject();
 		JsonArray jsonArray = new JsonArray();
-		for (Gene g : result)
+		for (Patient p : result)
 		{
 			JsonObject jsonValues = new JsonObject();
-			for (String field : g.getFields())
+			for (String field : p.getFields())
 			{
-				if (g.get(field) != null) jsonValues.addProperty(field, g.get(field).toString());
+				if (p.get(field) != null) jsonValues.addProperty(field, p.get(field).toString());
 				else jsonValues.addProperty(field, "");
 			}
 			jsonArray.add(jsonValues);
 		}
 		jsonObject.add("mut", jsonArray);
 		
-		// send it back to client
-		//System.out.println("JSON\r" + jsonObject.toString());
 		PrintWriter p = response.getResponse().getWriter();
 		response.getResponse().setContentType("text/plain");
 		p.print(jsonObject);

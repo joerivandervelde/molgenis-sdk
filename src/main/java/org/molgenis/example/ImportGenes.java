@@ -31,11 +31,18 @@ public class ImportGenes
 		String col7a1Genes = "src/main/resources/col7a1_das.tsv";
 		
 		String chd7Chromosomes = "src/main/resources/CHD7-chromosomes.tsv";
-		String chd7Genes = "src/main/resources/CHD7-mutations_v2.tsv";
+//		String chd7Genes = "src/main/resources/CHD7-mutations_v2.tsv";
+		String chd7Genes = "/Users/pdopheide/Desktop/CHD7-mutations.txt";
 		
 		//importGenes(elegansChromosomes, elegansGenes);
 		importGenes(col7a1Chromosomes, col7a1Genes);
-		importGenes(chd7Chromosomes, chd7Genes);
+//		importGenes(chd7Chromosomes, chd7Genes);
+		
+		// ###
+//		String patientsFile = "/Users/pdopheide/Desktop/CHD7-patients.txt";
+		//String patientsFile = "/Users/pdopheide/Desktop/col7a1-patients-test.txt";
+		String patientsFile = "src/main/resources/col7a1_patients_PUBLIC_DEMODATA.txt";
+		importPatients(patientsFile);
 	}
 	
 	private static void importGenes(String chromosomesFile, String genesFile) throws DatabaseException, IOException{
@@ -58,7 +65,24 @@ public class ImportGenes
 		csvReader = new CsvReader(genes, '\t', true);
 		entitiesImporter.importEntities(csvReader, "Gene", DatabaseAction.ADD);
 		csvReader.close();
+		
+		System.out.println("..done");
+	}
 	
+	private static void importPatients(String patientsFile) throws DatabaseException, IOException{
+		System.out.println("preparing..");
+		
+		Database db = new org.molgenis.JpaDatabase(
+				Persistence.createEntityManagerFactory(JpaDatabase.DEFAULT_PERSISTENCE_UNIT_NAME));
+		EntitiesImporterImpl entitiesImporter = new EntitiesImporterImpl(db);
+		
+		System.out.println("starting import of patients..");
+		
+		File pat = new File(patientsFile);
+		CsvReader csvReader = new CsvReader(pat, '\t', true);
+		entitiesImporter.importEntities(csvReader, "Patient", DatabaseAction.ADD);
+		csvReader.close();
+		
 		System.out.println("..done");
 	}
 

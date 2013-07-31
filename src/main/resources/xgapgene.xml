@@ -50,7 +50,25 @@
 				'mouse 3 in cage 7' or 'TRA-2 like protein'. Label allows for human-readable name that is potentially not unique." />
 			<unique fields="name" />
 		</entity>
-
+		<entity name="Patient">
+			<description>Characteristics, mostly phenotypes for patients.</description>
+			<field name="id" type="autoid" description="automatically generated id" />
+			<field name="PatientID" length="127" type="varchar" nillable="true"/>
+			<field name="Pheno" length="127" type="varchar" nillable="true" />
+			<field name="cDNAchange1" length="127" type="varchar" nillable="true" />
+			<field name="ProteinChange1" length="127" type="varchar" nillable="true" />
+			<field name="ExonIntron1" length="127" type="varchar" nillable="true" />
+			<field name="Consequence1" length="127" type="varchar" nillable="true" />
+			<field name="cDNAchange2" length="127" type="varchar" nillable="true" />
+			<field name="ProteinChange2" length="127" type="varchar" nillable="true" />
+			<field name="ExonIntron2" length="127" type="varchar" nillable="true" />
+			<field name="Consequence2" length="127" type="varchar" nillable="true" />
+			<field name="PubMedID" length="127" type="varchar" nillable="true" />
+			<field name="Reference" length="127" type="varchar" nillable="true" />
+			<field name="Mutation1" length="127" type="varchar" nillable="true" />
+			<field name="Mutation2" length="127" type="varchar" nillable="true" />
+			<unique fields="PatientID" />
+		</entity>
 
 	</module>
 </molgenis>
