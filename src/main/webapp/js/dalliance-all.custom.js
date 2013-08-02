@@ -9028,8 +9028,10 @@ function parseLocCardinal(n, m) {
 
 Browser.prototype.initUI = function(holder, genomePanel) {
     // FIXME shouldn't be hard-coded...
-    document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/bootstrap-scoped.css'}));
-    document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/dalliance-scoped.css'}));
+    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/bootstrap-scoped.css'}));
+    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/dalliance-scoped.css'}));
+    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: + 'localhost:8080/' + 'css/bootstrap-scoped.css'}));
+    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: + 'localhost:8080/' + 'css/dalliance-scoped.css'}));
 
     var b = this;
     var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):([0-9,]+)([KkMmGg])?([\-,\,.]+([0-9,]+)([KkMmGg])?)?/;
@@ -9251,6 +9253,27 @@ Browser.prototype.initUI = function(holder, genomePanel) {
        }
 
         b.setLocation(b.defaultChr, b.defaultStart, b.defaultEnd);
+        
+        // custom code
+		var url = 'http://localhost:8080/mutation?hit='
+		console.log(url);
+		$.ajax({
+			url: url,
+			type: "GET",
+			dataType: "json",
+			success: function(data) {
+			console.log("Data returned : " + data);
+		
+		if (typeof data == 'object') {
+			informationTable(data);
+		}
+		},
+		error: function(jqXHR, textStatus, errorThrown) {
+			console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
+		}
+		});
+		// custom code
+        
     }, false);
     b.makeTooltip(resetBtn, 'Reset to default tracks and view.');
 

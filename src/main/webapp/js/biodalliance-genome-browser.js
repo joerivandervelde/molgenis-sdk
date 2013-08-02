@@ -33,7 +33,8 @@ new Browser({
                   provides_karyotype:   true,
                   provides_search:      true},
                  {name:                 'col7a1 mutations',
-                  uri:                  'http://localhost:8080/das/col7a1'}],
+                  uri:                  'http://localhost:8080/das/col7a1',
+                  desc:                 'Patient mutations in the COL7A1 gene'}],
    
    browserLinks: {
        Ensembl: 'http://www.ensembl.org/Homo_sapiens/Location/View?r=${chr}:${start}-${end}',

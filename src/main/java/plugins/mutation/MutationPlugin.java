@@ -58,7 +58,8 @@ public class MutationPlugin extends PluginModel
 	// adding custom content to the html <header>
 	@Override
 	public String getCustomHtmlHeaders(){
-		return "<script language=\"javascript\" src=\"js/dalliance-all.js\"></script><script language=\"javascript\" src=\"js/BioDallianceGenomeBrowser.js\"></script><script language=\"javascript\" src=\"js/InformationTable.js\"></script>";
+		return "<script language=\"javascript\" src=\"js/dalliance-all.custom.js\"></script><script language=\"javascript\" src=\"js/biodalliance-genome-browser.js\"></script><script language=\"javascript\" src=\"js/information-table.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">";
+		//return "<script language=\"javascript\" src=\"js/dalliance-all.custom.js\"></script><script language=\"javascript\" src=\"js/biodalliance-genome-browser.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">     <script type=\"text/javascript\" charset=\"utf-8\" src=\"js/DataTables-1.9.4/media/js/jquery.js\"></script><script type=\"text/javascript\" charset=\"utf-8\" src=\"js/DataTables-1.9.4/media/js/jquery.dataTables.js\"></script>";
 	}
 	
 }

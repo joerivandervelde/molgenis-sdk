@@ -27,12 +27,11 @@ public class ImportGenes
 		String elegansChromosomes = "src/main/resources/elegans_chromosomes.tsv";
 		String elegansGenes = "src/main/resources/elegans_genes.tsv";
 		
-		String col7a1Chromosomes = "src/main/resources/col7a1_chromosomes.tsv";
-		String col7a1Genes = "src/main/resources/col7a1_das.tsv";
+		String col7a1Chromosomes = "src/main/resources/col7a1-chromosomes.tsv";
+		String col7a1Genes = "src/main/resources/col7a1-mutations.tsv";
 		
 		String chd7Chromosomes = "src/main/resources/CHD7-chromosomes.tsv";
-//		String chd7Genes = "src/main/resources/CHD7-mutations_v2.tsv";
-		String chd7Genes = "/Users/pdopheide/Desktop/CHD7-mutations.txt";
+		String chd7Genes = "src/main/resources/CHD7-mutations.tsv";
 		
 		//importGenes(elegansChromosomes, elegansGenes);
 		importGenes(col7a1Chromosomes, col7a1Genes);
@@ -40,8 +39,7 @@ public class ImportGenes
 		
 		// ###
 //		String patientsFile = "/Users/pdopheide/Desktop/CHD7-patients.txt";
-		//String patientsFile = "/Users/pdopheide/Desktop/col7a1-patients-test.txt";
-		String patientsFile = "src/main/resources/col7a1_patients_PUBLIC_DEMODATA.txt";
+		String patientsFile = "src/main/resources/col7a1-patients-PUBLIC-DEMODATA.tsv";
 		importPatients(patientsFile);
 	}
 	
