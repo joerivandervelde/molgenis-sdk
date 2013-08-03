@@ -7,7 +7,7 @@
 			Genome Browser Plugin
 		</p>
 	</div>
-
+	
 	<div id="svgHolder"></div>
 	
 	<div id="tableHolder"></div>

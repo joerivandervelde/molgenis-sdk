@@ -69,6 +69,17 @@
 			<field name="Mutation2" length="127" type="varchar" nillable="true" />
 			<unique fields="PatientID" />
 		</entity>
+		
+		<entity name="GoNLVariant">
+			<field name="Id" type="autoid" />
+			<field name="Chrom" type="string" />
+			<field name="Pos" type="int" />
+			<field name="Rsid" type="string" />
+			<field name="Ref" type="string" />
+			<field name="Alt" type="string" />
+			<field name="Qual" type="string" />
+			<field name="Info" type="string" />
+		</entity>
 
 	</module>
 </molgenis>
