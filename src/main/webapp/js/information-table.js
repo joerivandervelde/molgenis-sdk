@@ -1,8 +1,7 @@
 function informationTable(features){
-	var results_div = document.getElementById('tableHolder');
+	var results_div = document.getElementById('patientData');
 	
-	var table = '<table id="patientData" class="display" border="1">';
-	table += '<thead><tr><th>ID</th><th>cDNA change</th><th>Protein change</th><th>Exon/Intron</th><th>Consequence</th><th>Phenotype</th><th>PubMed ID</th><th>Reference</th></tr></thead>';
+	var table = '<thead><tr><th>ID</th><th>cDNA change</th><th>Protein change</th><th>Exon/Intron</th><th>Consequence</th><th>Phenotype</th><th>PubMed ID</th><th>Reference</th></tr></thead>';
 	table += '<tbody>';
 	
 	for(m in features.mut){
@@ -25,7 +24,16 @@ function informationTable(features){
 	}
 	
 	table += '</tbody>';
-	table += '</table>';
+	
+	results_div.addEventListener('click', function delegate(e){
+		var cell = e.target.innerText; // current cell
+		//var row = e.target.parentNode.innerText; // current row
+		patientClick(cell);
+	});
 	
 	results_div.innerHTML = table;
+}
+
+function patientClick(cell){
+	alert(cell);
 }

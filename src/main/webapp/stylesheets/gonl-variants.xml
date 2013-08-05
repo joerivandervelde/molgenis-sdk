@@ -1,0 +1,14 @@
+<DASSTYLE>
+	<STYLESHEET>
+		<CATEGORY id="default">
+			<TYPE id="variant">
+				<GLYPH>
+					<BOX>
+						<BGCOLOR>orange</BGCOLOR>
+						<LABEL>true</LABEL>
+					</BOX>
+				</GLYPH>
+			</TYPE>
+		</CATEGORY>
+	</STYLESHEET>
+</DASSTYLE>

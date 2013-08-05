@@ -9262,16 +9262,16 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 			type: "GET",
 			dataType: "json",
 			success: function(data) {
-			console.log("Data returned : " + data);
-		
-		if (typeof data == 'object') {
-			informationTable(data);
-		}
-		},
-		error: function(jqXHR, textStatus, errorThrown) {
-			console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
-		}
-		});
+				console.log("Data returned : " + data);
+				
+				if (typeof data == 'object') {
+					informationTable(data);
+				}
+				},
+				error: function(jqXHR, textStatus, errorThrown) {
+					console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
+				}
+			});
 		// custom code
         
     }, false);

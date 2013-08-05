@@ -10,6 +10,9 @@
 	
 	<div id="svgHolder"></div>
 	
-	<div id="tableHolder"></div>
+	<div id="tableHolder">
+		<table id="patientData">
+		</table>
+	</div>
 
 </#macro>
