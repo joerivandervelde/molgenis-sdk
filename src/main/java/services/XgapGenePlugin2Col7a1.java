@@ -38,11 +38,17 @@ public class XgapGenePlugin2Col7a1 extends AbstractGFFFeatureSource implements
 		DazzleReferenceSource {
 
 	Database db;
+	
+	/**
+	 * DEMO PURPOSES
+	 */
+	static public String patientId;
 
 	String fileName; // the filename to parse
 
 	public void init(ServletContext ctx) throws DataSourceException {
 		super.init(ctx);
+		
 		try {
 			db = new org.molgenis.JpaDatabase(
 					Persistence
@@ -165,7 +171,7 @@ public class XgapGenePlugin2Col7a1 extends AbstractGFFFeatureSource implements
 			String chr = segment.getReference();
 			System.out.println("start / stop / ref: " + start + " / " + stop
 					+ " / " + chr);
-
+			
 			Query<Gene> q = db.query(Gene.class);
 			q.greaterOrEqual(Gene.BPSTART, start);
 			q.lessOrEqual(Gene.BPEND, stop);

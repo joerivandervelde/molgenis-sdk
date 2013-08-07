@@ -3,6 +3,7 @@ new Browser({
    viewStart:    48601506,
    viewEnd:      48632700,
    cookieKey:    'human',
+   patientID:    'P292',
    
    coordSystem: {
        speciesName: 'Human',
@@ -37,7 +38,10 @@ new Browser({
                   uri:                  'http://localhost:8080/das/gonl'},
                  {name:                 'col7a1 mutations',
                   uri:                  'http://localhost:8080/das/col7a1',
-                  desc:                 'Patient mutations in the COL7A1 gene'}],
+                  desc:                 'Patient mutations in the COL7A1 gene'},
+                 {name:                 'P292',
+                  uri:                  'http://localhost:8080/das/patientmutations/features?segment=P292',
+                  desc:                 'experiment'}],
    
    browserLinks: {
        Ensembl: 'http://www.ensembl.org/Homo_sapiens/Location/View?r=${chr}:${start}-${end}',

@@ -38,6 +38,17 @@ public class MolgenisDasService extends DazzleServlet implements MolgenisService
 	{
 		try
 		{
+			/**
+			 * DEMO PURPOSES!!
+			 */
+			request.getClass();
+			if(request.getString("pid") != null)
+			{
+				XgapGenePlugin2PatientMutations.patientId =  request.getString("pid");
+			}else
+			{
+				XgapGenePlugin2PatientMutations.patientId =  null;
+			}
 			super.doGet(request.getRequest(), response.getResponse());
 		}
 		catch (ServletException e)

@@ -39,6 +39,11 @@ public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource im
 		DazzleReferenceSource {
 
 	Database db;
+	
+	/**
+	 * DEMO PURPOSES
+	 */
+	static public String patientId;
 
 	String fileName; // the filename to parse
 
@@ -82,17 +87,17 @@ public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource im
 			NoSuchElementException {
 		Sequence s = null;
 
-		//Alphabet dna = DNATools.getDNA();
-		// Annotation a = new SimpleAnnotation();
-		//Symbol s = new SimpleAtomicSymbol(null, null);
+		Alphabet dna = DNATools.getDNA();
+//		Annotation a = new SimpleAnnotation();
+//		Symbol s = new SimpleAtomicSymbol(null, null);
 
 		try {
 			System.out.println("GETTING CHR: " + ref);
 			Chromosome chr = db.find(Chromosome.class,
 					new QueryRule(Chromosome.NAME, Operator.EQUALS, ref))
 					.get(0);
-//			s = org.biojava.bio.seq.SequenceTools.createDummy(dna, chr
-//					.getBpLength().intValue(), null, "URI", ref);
+			s = org.biojava.bio.seq.SequenceTools.createDummy(dna, chr
+					.getBpLength().intValue(), null, "URI", ref);
 			
 			s = org.biojava.bio.seq.ProteinTools.createProteinSequence(ref, ref+"iets");
 			
@@ -167,35 +172,37 @@ public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource im
 			System.out.println("start / stop / ref: " + start + " / " + stop
 					+ " / " + chr);
 
-			// from here things need to be different
-//			Query<Gene> q = db.query(Gene.class);
-//			q.greaterOrEqual(Gene.BPSTART, start);
-//			q.lessOrEqual(Gene.BPEND, stop);
-//			q.equals(Gene.CHROMOSOME_NAME, chr);
-//			List<Gene> genes = q.find();
-//			System.out.println(genes.size() + " genes found!!!");
-			String pId = chr;
+			String pId = segment.getReference().split("/")[0];
+			//String pId = patientId.split("/")[0];
+			List<Patient> patients = null;
+			Query q = db.query(Patient.class);
+			q.addRules(new QueryRule(Patient.PATIENTID, Operator.EQUALS, pId));
+			patients = q.find();
+			System.out.println(patients.size() + " patient(s) found!!!");
+			
 			List<Gene> genes = null;
-			Query q = db.query(Gene.class);
-			q.addRules(new QueryRule(Gene.NAME, Operator.JOIN, Patient.MUTATION1));
-			q.addRules(new QueryRule(Patient.MUTATION1, Operator.EQUALS, pId));
-			genes = q.find();
-
+			Query q2 = db.query(Gene.class);
+			q2.addRules(new QueryRule(Gene.NAME, Operator.EQUALS, patients.get(0).getMutation1()));
+			q2.addRules(new QueryRule(Operator.OR));
+			q2.addRules(new QueryRule(Gene.NAME, Operator.EQUALS, patients.get(0).getMutation2()));
+			genes = q2.find();
+			System.out.println(genes.size() + " mutation(s) found!!!");
+				
 			List<GFFFeature> features = new ArrayList<GFFFeature>();
-
-			for (Gene g : genes) {
+			
+			for(Gene g : genes){
 				GFFFeature gff = new GFFFeature();
-				gff.setLink("http://www.wormqtl.org/molgenis.do?__target=QtlFinderPublic2&select=QtlFinderPublic2&p="
-						+ g.getName());
-				gff.setType("gene");
+				gff.setLink("http://www.deb-central.org/molgenis.do?__target=SearchPlugin&__action=showMutation&mid="
+						+ g.getName() + "#results");
+				gff.setType("mutation");
 				gff.setTypeId(g.getSeq());
 				gff.setMethod(g.getSymbol());
-				gff.setLabel(g.getLabel());
+				//gff.setLabel(g.getLabel());
 				gff.setStart(g.getBpStart() + "");
 				gff.setEnd(g.getBpEnd() + "");
 				gff.setName(g.getName());
-				gff.setNote(g.getDescription());
-				gff.setOrientation(g.getOrientation());
+				gff.setNote(g.getLabel() + "; " + g.getDescription());
+				//gff.setOrientation(g.getOrientation());
 				features.add(gff);
 			}
 

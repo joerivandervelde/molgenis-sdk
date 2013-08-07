@@ -35,5 +35,6 @@ function informationTable(features){
 }
 
 function patientClick(cell){
-	alert(cell);
+	//alert(cell);
+	alert('http://localhost:8080/das/patientmutations/features?segment=' + cell);
 }
