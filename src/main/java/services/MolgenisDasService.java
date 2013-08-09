@@ -3,6 +3,8 @@ package services;
 import java.io.IOException;
 
 import javax.servlet.ServletException;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
 
 import org.apache.log4j.Logger;
 import org.biojava.servlets.dazzle.DazzleServlet;
@@ -42,13 +44,17 @@ public class MolgenisDasService extends DazzleServlet implements MolgenisService
 			 * DEMO PURPOSES!!
 			 */
 			request.getClass();
-			if(request.getString("pid") != null)
-			{
-				XgapGenePlugin2PatientMutations.patientId =  request.getString("pid");
-			}else
-			{
-				XgapGenePlugin2PatientMutations.patientId =  null;
+			
+			HttpServletRequest req = request.getRequest();
+			String requestURI = req.getRequestURI();
+			
+			if(requestURI.startsWith("/das/patient&pid=")){
+				String toReplace = requestURI.substring(requestURI.indexOf("&pid="), requestURI.lastIndexOf("/")); // we want to keep the slash in the URI
+				String newURI = requestURI.replace(toReplace, ""); // remove &pid= from the URI
+				XgapGenePlugin2Patient.patientId = toReplace.split("=")[1]; // pass patient id to plugin code
+				req.getRequestDispatcher(newURI).forward(req, response.getResponse());
 			}
+
 			super.doGet(request.getRequest(), response.getResponse());
 		}
 		catch (ServletException e)

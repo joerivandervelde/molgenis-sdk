@@ -35,7 +35,7 @@ import org.molgenis.xgap.Patient;
  * @author jvelde
  * 
  */
-public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource implements
+public class XgapGenePlugin2Patient extends AbstractGFFFeatureSource implements
 		DazzleReferenceSource {
 
 	Database db;
@@ -49,6 +49,7 @@ public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource im
 
 	public void init(ServletContext ctx) throws DataSourceException {
 		super.init(ctx);
+		
 		try {
 			db = new org.molgenis.JpaDatabase(
 					Persistence
@@ -87,17 +88,17 @@ public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource im
 			NoSuchElementException {
 		Sequence s = null;
 
-		Alphabet dna = DNATools.getDNA();
-//		Annotation a = new SimpleAnnotation();
-//		Symbol s = new SimpleAtomicSymbol(null, null);
+		//Alphabet dna = DNATools.getDNA();
+		// Annotation a = new SimpleAnnotation();
+		//Symbol s = new SimpleAtomicSymbol(null, null);
 
 		try {
 			System.out.println("GETTING CHR: " + ref);
 			Chromosome chr = db.find(Chromosome.class,
 					new QueryRule(Chromosome.NAME, Operator.EQUALS, ref))
 					.get(0);
-			s = org.biojava.bio.seq.SequenceTools.createDummy(dna, chr
-					.getBpLength().intValue(), null, "URI", ref);
+//			s = org.biojava.bio.seq.SequenceTools.createDummy(dna, chr
+//					.getBpLength().intValue(), null, "URI", ref);
 			
 			s = org.biojava.bio.seq.ProteinTools.createProteinSequence(ref, ref+"iets");
 			
@@ -166,44 +167,57 @@ public class XgapGenePlugin2PatientMutations extends AbstractGFFFeatureSource im
 					System.out.println("s: " + s);
 				}
 
+			//String pId = "P292";
+			String pId = patientId;
 			int start = segment.getStart();
 			int stop = segment.getStop();
 			String chr = segment.getReference();
 			System.out.println("start / stop / ref: " + start + " / " + stop
 					+ " / " + chr);
-
-			String pId = segment.getReference().split("/")[0];
-			//String pId = patientId.split("/")[0];
+			System.out.println("pId: " + pId);
+			
 			List<Patient> patients = null;
-			Query q = db.query(Patient.class);
-			q.addRules(new QueryRule(Patient.PATIENTID, Operator.EQUALS, pId));
-			patients = q.find();
+			Query qPatient = db.query(Patient.class);
+			qPatient.addRules(new QueryRule(Patient.PATIENTID, Operator.EQUALS, pId));
+			patients = qPatient.find();
 			System.out.println(patients.size() + " patient(s) found!!!");
 			
-			List<Gene> genes = null;
-			Query q2 = db.query(Gene.class);
-			q2.addRules(new QueryRule(Gene.NAME, Operator.EQUALS, patients.get(0).getMutation1()));
-			q2.addRules(new QueryRule(Operator.OR));
-			q2.addRules(new QueryRule(Gene.NAME, Operator.EQUALS, patients.get(0).getMutation2()));
-			genes = q2.find();
-			System.out.println(genes.size() + " mutation(s) found!!!");
-				
 			List<GFFFeature> features = new ArrayList<GFFFeature>();
 			
-			for(Gene g : genes){
-				GFFFeature gff = new GFFFeature();
-				gff.setLink("http://www.deb-central.org/molgenis.do?__target=SearchPlugin&__action=showMutation&mid="
-						+ g.getName() + "#results");
-				gff.setType("mutation");
-				gff.setTypeId(g.getSeq());
-				gff.setMethod(g.getSymbol());
-				//gff.setLabel(g.getLabel());
-				gff.setStart(g.getBpStart() + "");
-				gff.setEnd(g.getBpEnd() + "");
-				gff.setName(g.getName());
-				gff.setNote(g.getLabel() + "; " + g.getDescription());
-				//gff.setOrientation(g.getOrientation());
-				features.add(gff);
+			if(patients.size() != 0){
+				List<Gene> genes = null;
+				Query q2 = db.query(Gene.class);
+				q2.addRules(new QueryRule(Gene.NAME, Operator.EQUALS, patients.get(0).getMutation1()));
+				q2.addRules(new QueryRule(Operator.OR));
+				q2.addRules(new QueryRule(Gene.NAME, Operator.EQUALS, patients.get(0).getMutation2()));
+				q2.addRules(new QueryRule(Gene.BPSTART, Operator.GREATER_EQUAL, start));
+				q2.addRules(new QueryRule(Gene.BPEND, Operator.LESS_EQUAL, stop));
+				q2.addRules(new QueryRule(Gene.CHROMOSOME_NAME, Operator.EQUALS, chr));
+				genes = q2.find();
+				System.out.println(genes.size() + " mutation(s) found!!!");
+				
+//				Query<Gene> q = db.query(Gene.class);
+//				q.greaterOrEqual(Gene.BPSTART, start);
+//				q.lessOrEqual(Gene.BPEND, stop);
+//				q.equals(Gene.CHROMOSOME_NAME, chr);
+//				List<Gene> genes = q.find();
+//				System.out.println(genes.size() + " genes found!!!");
+
+				for (Gene g : genes) {
+					GFFFeature gff = new GFFFeature();
+					gff.setLink("http://www.deb-central.org/molgenis.do?__target=SearchPlugin&__action=showMutation&mid="
+							+ g.getName() + "#results");
+					gff.setType("mutation");
+					gff.setTypeId(g.getSeq());
+					gff.setMethod(g.getSymbol());
+					//gff.setLabel(g.getLabel());
+					gff.setStart(g.getBpStart() + "");
+					gff.setEnd(g.getBpEnd() + "");
+					gff.setName(g.getName());
+					gff.setNote(g.getLabel() + "; " + g.getDescription());
+					//gff.setOrientation(g.getOrientation());
+					features.add(gff);
+				}
 			}
 
 			// and we return our features

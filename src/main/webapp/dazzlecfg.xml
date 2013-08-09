@@ -32,7 +32,7 @@
     <string name="description" value="a demo for how to write a Dazzle plugin" />
     <string name="version" value="1.0" />
   </datasource>
-  <datasource id="patientmutations" jclass="services.XgapGenePlugin2PatientMutations">
+  <datasource id="patient" jclass="services.XgapGenePlugin2Patient">
     <string name="name" value="database_gene_test" />
     <string name="description" value="a demo for how to write a Dazzle plugin" />
     <string name="version" value="1.0" />

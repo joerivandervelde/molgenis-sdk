@@ -40,7 +40,7 @@ new Browser({
                   uri:                  'http://localhost:8080/das/col7a1',
                   desc:                 'Patient mutations in the COL7A1 gene'},
                  {name:                 'P292',
-                  uri:                  'http://localhost:8080/das/patientmutations/features?segment=P292',
+                  uri:                  'http://localhost:8080/das/patient&pid=P292',
                   desc:                 'experiment'}],
    
    browserLinks: {

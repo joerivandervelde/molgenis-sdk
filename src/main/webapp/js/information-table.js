@@ -35,6 +35,15 @@ function informationTable(features){
 }
 
 function patientClick(cell){
-	//alert(cell);
-	alert('http://localhost:8080/das/patientmutations/features?segment=' + cell);
+	var pattern = /P\d+/g;
+	var match = pattern.test(cell);
+	
+	if(match){ // check if we have a patient id
+		var trackName = 'Patient';
+		var trackSource = 'http://localhost:8080/das/patient&pid=' + cell;
+		
+		alert(trackSource);
+		// add track to browser
+		DasTier();
+	}
 }
