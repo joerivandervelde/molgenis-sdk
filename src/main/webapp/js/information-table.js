@@ -1,3 +1,12 @@
+/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+// 
+// MOLGENIS Dalliance Plug-in
+// (c) Pieter Dopheide 2013
+//
+// information-table.js: table for displaying patient data
+//
+
 function informationTable(features){
 	var results_div = document.getElementById('patientData');
 	
@@ -37,13 +46,23 @@ function informationTable(features){
 function patientClick(cell){
 	var pattern = /P\d+/g;
 	var match = pattern.test(cell);
+	this.sources = [];
+	var thisB = this;
 	
 	if(match){ // check if we have a patient id
 		var trackName = 'Patient';
 		var trackSource = 'http://localhost:8080/das/patient&pid=' + cell;
+		var source = [{name: 'P292',
+                       uri:  'http://localhost:8080/das/patient&pid=P292',
+                       desc: 'experiment'}];
+        
+        //Browser.prototype.makeTier(source[0]);
+        //Browser.addTier(source[0]);
+        thisB.addTier(source[0]);
 		
-		alert(trackSource);
+		//alert(source[0].name);
+		alert(thisB);
 		// add track to browser
-		DasTier();
+		//DasTier();
 	}
 }

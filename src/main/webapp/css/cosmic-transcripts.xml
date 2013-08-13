@@ -1,0 +1,27 @@
+<DASSTYLE>
+	<STYLESHEET>
+		<CATEGORY id="default">
+			<TYPE id="default">
+				<GLYPH zoom="low">
+					<BOX>
+						<BGCOLOR>white</BGCOLOR>
+						<FGCOLOR>blue</FGCOLOR>
+					</BOX>
+				</GLYPH>
+				<GLYPH zoom="medium">
+					<BOX>
+						<BGCOLOR>white</BGCOLOR>
+						<FGCOLOR>blue</FGCOLOR>
+					</BOX>
+				</GLYPH>
+				<GLYPH zoom="high">
+					<BOX>
+						<BGCOLOR>white</BGCOLOR>
+						<FGCOLOR>blue</FGCOLOR>
+						<LABEL>true</LABEL>
+					</BOX>
+				</GLYPH>
+			</TYPE>
+		</CATEGORY>
+	</STYLESHEET>
+</DASSTYLE>

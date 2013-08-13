@@ -1,12 +1,10 @@
-<?xml version="1.0" standalone="no"?>
 <DASSTYLE>
 	<STYLESHEET>
 		<CATEGORY id="default">
-			<TYPE id="variant">
+			<TYPE id="default">
 				<GLYPH>
 					<BOX>
 						<BGCOLOR>orange</BGCOLOR>
-						<LABEL>true</LABEL>
 					</BOX>
 				</GLYPH>
 			</TYPE>
