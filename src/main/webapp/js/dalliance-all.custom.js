@@ -465,15 +465,15 @@ function BigWig() {
 }
 
 BigWig.prototype.readChromTree = function(callback) {
+    console.log('readChromTree: udo=' + this.unzoomedDataOffset + '; cto=' + this.chromTreeOffset);
     var thisB = this;
     this.chromsToIDs = {};
     this.idsToChroms = {};
     this.maxID = 0;
 
     var udo = this.unzoomedDataOffset;
-    while ((udo % 4) != 0) {
-        ++udo;
-    }
+    var eb = (udo - this.chromTreeOffset) & 3;
+    udo = udo + 4 - eb;
 
     this.data.slice(this.chromTreeOffset, udo - this.chromTreeOffset).fetch(function(bpt) {
         var ba = new Uint8Array(bpt);
@@ -621,10 +621,10 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                 var endBase = la[lo + 3];
                 var blockOffset = (la[lo + 4]<<32) | (la[lo + 5]);
                 var blockSize = (la[lo + 6]<<32) | (la[lo + 7]);
-                if ((startChrom < chr || (startChrom == chr && startBase <= max)) &&
-                    (endChrom   > chr || (endChrom == chr && endBase >= min)))
+                if (((chr < 0 || startChrom < chr) || (startChrom == chr && startBase <= max)) &&
+                    ((chr < 0 || endChrom   > chr) || (endChrom == chr && endBase >= min)))
                 {
-                    // dlog('Got an interesting block: startBase=' + startBase + '; endBase=' + endBase + '; offset=' + blockOffset + '; size=' + blockSize);
+                    // console.log('Got an interesting block: startChrom=' + startChrom + '; startBase=' + startBase + '; endChrom=' + endChrom + ' ;endBase=' + endBase + '; offset=' + blockOffset + '; size=' + blockSize);
                     blocksToFetch.push({offset: blockOffset, size: blockSize});
                 }
                 offset += 32;
@@ -638,10 +638,11 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                 var endChrom = la[lo + 2];
                 var endBase = la[lo + 3];
                 var blockOffset = (la[lo + 4]<<32) | (la[lo + 5]);
-                if ((startChrom < chr || (startChrom == chr && startBase <= max)) &&
-                    (endChrom   > chr || (endChrom == chr && endBase >= min)))
+                if ((chr < 0 || startChrom < chr || (startChrom == chr && startBase <= max)) &&
+                    (chr < 0 || endChrom   > chr || (endChrom == chr && endBase >= min)))
                 {
                     recurOffsets.push(blockOffset);
+                    // console.log('interesting inner: startChrom=' + startChrom + '; endChrom=' + endChrom);
                 }
                 offset += 24;
             }
@@ -661,7 +662,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
             callback([]);
         } else {
             var features = [];
-            var createFeature = function(fmin, fmax, opts) {
+            var createFeature = function(chr, fmin, fmax, opts) {
                 // dlog('createFeature(' + fmin +', ' + fmax + ')');
 
                 if (!opts) {
@@ -669,6 +670,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                 }
             
                 var f = new DASFeature();
+                f._chromId = chr;
                 f.segment = thisB.bwg.idsToChroms[chr];
                 f.min = fmin;
                 f.max = fmax;
@@ -680,9 +682,9 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                 
                 features.push(f);
             };
-            var maybeCreateFeature = function(fmin, fmax, opts) {
-                if (fmin <= max && fmax >= min) {
-                    createFeature(fmin, fmax, opts);
+            var maybeCreateFeature = function(chromId, fmin, fmax, opts) {
+                if ((chr < 0 || chromId == chr) && fmin <= max && fmax >= min) {
+                    createFeature(chromId, fmin, fmax, opts);
                 }
             };
             var tramp = function() {
@@ -712,12 +714,12 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                 var sumData   = fa[(i*8)+6];
                                 var sumSqData = fa[(i*8)+7];
                                 
-                                if (chromId == chr) {
+                                if (chr < 0 || chromId == chr) {
                                     var summaryOpts = {type: 'bigwig', score: sumData/validCnt, maxScore: maxVal};
                                     if (thisB.bwg.type == 'bigbed') {
                                         summaryOpts.type = 'density';
                                     }
-                                    maybeCreateFeature(start + 1, end, summaryOpts);
+                                    maybeCreateFeature(chromId, start + 1, end, summaryOpts);
                                 }
                             }
                         } else if (thisB.bwg.type == 'bigwig') {
@@ -738,13 +740,13 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                             if (blockType == BIG_WIG_TYPE_FSTEP) {
                                 for (var i = 0; i < itemCount; ++i) {
                                     var score = fa[i + 6];
-                                    maybeCreateFeature(blockStart + (i*itemStep) + 1, blockStart + (i*itemStep) + itemSpan, {score: score});
+                                    maybeCreateFeature(chromId, blockStart + (i*itemStep) + 1, blockStart + (i*itemStep) + itemSpan, {score: score});
                                 }
                             } else if (blockType == BIG_WIG_TYPE_VSTEP) {
                                 for (var i = 0; i < itemCount; ++i) {
                                     var start = la[(i*2) + 6];
                                     var score = fa[(i*2) + 7];
-                                    maybeCreateFeature(start + 1, start + itemSpan, {score: score});
+                                    maybeCreateFeature(chromId, start + 1, start + itemSpan, {score: score});
                                 }
                             } else if (blockType == BIG_WIG_TYPE_GRAPH) {
                                 for (var i = 0; i < itemCount; ++i) {
@@ -754,7 +756,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                     if (start > end) {
                                         start = end;
                                     }
-                                    maybeCreateFeature(start + 1, end, {score: score});
+                                    maybeCreateFeature(chromId, start + 1, end, {score: score});
                                 }
                             } else {
                                 dlog('Currently not handling bwgType=' + blockType);
@@ -797,7 +799,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
 
                                 if (bedColumns.length < 9) {
                                     if (chromId == chr) {
-                                        maybeCreateFeature(start + 1, end, featureOpts);
+                                        maybeCreateFeature(chromId, start + 1, end, featureOpts);
                                     }
                                 } else if (chromId == chr && start <= max && end >= min) {
                                     // Complex-BED?
@@ -841,7 +843,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                     var tsList = spans.ranges();
                                     for (var s = 0; s < tsList.length; ++s) {
                                         var ts = tsList[s];
-                                        createFeature(ts.min() + 1, ts.max(), featureOpts);
+                                        createFeature(chromId, ts.min() + 1, ts.max(), featureOpts);
                                     }
 
                                     if (thickEnd > thickStart) {
@@ -851,7 +853,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                             var tlList = tl.ranges();
                                             for (var s = 0; s < tlList.length; ++s) {
                                                 var ts = tlList[s];
-                                                createFeature(ts.min() + 1, ts.max(), featureOpts);
+                                                createFeature(chromId, ts.min() + 1, ts.max(), featureOpts);
                                             }
                                         }
                                     }
@@ -1317,7 +1319,7 @@ function makeBwg(data, callback, name) {
         } else {
             callback(null, "Not a supported format");
         }
-//        dlog('magic okay');
+        // console.log('magic okay');
 
         bwg.version = sa[2];             // 4
         bwg.numZoomLevels = sa[3];       // 6
@@ -1329,7 +1331,8 @@ function makeBwg(data, callback, name) {
         bwg.asOffset = (la[9] << 32) | (la[10]);    // 36 (unaligned longlong)
         bwg.totalSummaryOffset = (la[11] << 32) | (la[12]);    // 44 (unaligned longlong)
         bwg.uncompressBufSize = la[13];  // 52
-         
+        
+        // console.log('bwgVersion: ' + bwg.version);
         // dlog('bigType: ' + bwg.type);
         // dlog('chromTree at: ' + bwg.chromTreeOffset);
         // dlog('uncompress: ' + bwg.uncompressBufSize);
@@ -1354,7 +1357,33 @@ function makeBwg(data, callback, name) {
 }
 
 
+BigWig.prototype._tsFetch = function(zoom, chr, min, max, callback) {
+    var bwg = this;
+    // console.log('tsFetch: ' + zoom + ', ' + chr + ', ' + min + ', ' + max);
+    if (zoom >= this.zoomLevels.length - 1) {
+        if (!this.topLevelReductionCache) {
+            this.getZoomedView(this.zoomLevels.length - 1).readWigDataById(-1, 0, 300000000, function(feats) {
+                bwg.topLevelReductionCache = feats;
+                return bwg._tsFetch(zoom, chr, min, max, callback);
+            });
+        } else {
+            var f = [];
+            var c = this.topLevelReductionCache;
+            for (var fi = 0; fi < c.length; ++fi) {
+                if (c[fi]._chromId == chr) {
+                    f.push(c[fi]);
+                }
+            }
+            return callback(f);
+        }
+    } else {
+        return this.getZoomedView(zoom).readWigDataById(chr, min, max, callback);
+    }
+}
+
 BigWig.prototype.thresholdSearch = function(chrName, referencePoint, dir, threshold, callback) {
+    // console.log('ref=' + referencePoint + '; dir=' + dir);
+
     dir = (dir<0) ? -1 : 1;
     var bwg = this;
     var initialChr = this.chromsToIDs[chrName];
@@ -1363,7 +1392,7 @@ BigWig.prototype.thresholdSearch = function(chrName, referencePoint, dir, thresh
         var chrId = (initialChr + (dir*i)) % (this.maxID + 1);
         if (chrId < 0) 
             chrId += (this.maxID + 1);
-        candidates.push({chrOrd: i, chr: chrId, zoom: bwg.zoomLevels.length - 4, min: 0, max: 300000000})
+        candidates.push({chrOrd: i, chr: chrId, zoom: bwg.zoomLevels.length - 1, min: 0, max: 300000000})
     }
        
     function fbThresholdSearchRecur() {
@@ -1385,22 +1414,34 @@ BigWig.prototype.thresholdSearch = function(chrName, referencePoint, dir, thresh
 	var candidate = candidates.splice(0, 1)[0];
         // console.log('trying ' + miniJSONify(candidate));
 
-        bwg.getZoomedView(candidate.zoom).readWigDataById(candidate.chr, candidate.min, candidate.max, function(feats) {
-            var rp = 0;
+        bwg._tsFetch(candidate.zoom, candidate.chr, candidate.min, candidate.max, function(feats) {
+            var rp = dir > 0 ? 0 : 300000000;
             if (candidate.fromRef)
                 rp = referencePoint;
             
             for (var fi = 0; fi < feats.length; ++fi) {
 	        var f = feats[fi];
                 
-	        if (f.maxScore > threshold) {
-		    if (candidate.zoom == 0) {
-		        if (f.min > rp)
-			    return callback(f);
-		    } else if (f.max > rp) {
-		        candidates.push({chr: candidate.chr, chrOrd: candidate.chrOrd, zoom: candidate.zoom - 1, min: f.min, max: f.max, fromRef: candidate.fromRef});
-		    }
-	        }
+
+                if (dir > 0) {
+	            if (f.maxScore > threshold) {
+		        if (candidate.zoom == 0) {
+		            if (f.min > rp)
+			        return callback(f);
+		        } else if (f.max > rp) {
+		            candidates.push({chr: candidate.chr, chrOrd: candidate.chrOrd, zoom: Math.max(0, candidate.zoom - 2), min: f.min, max: f.max, fromRef: candidate.fromRef});
+		        }
+	            }
+                } else {
+                    if (f.maxScore > threshold) {
+		        if (candidate.zoom == 0) {
+		            if (f.max < rp)
+			        return callback(f);
+		        } else if (f.min < rp) {
+		            candidates.push({chr: candidate.chr, chrOrd: candidate.chrOrd, zoom: Math.max(0, candidate.zoom - 2), min: f.min, max: f.max, fromRef: candidate.fromRef});
+		        }
+	            }
+                }
 	    }
             fbThresholdSearchRecur();
         });
@@ -1423,10 +1464,19 @@ function BlobFetchable(b) {
 
 BlobFetchable.prototype.slice = function(start, length) {
     var b;
-    if (length) {
-        b = this.blob.slice(start, start + length);
+
+    if (this.blob.slice) {
+        if (length) {
+            b = this.blob.slice(start, start + length);
+        } else {
+            b = this.blob.slice(start);
+        }
     } else {
-        b = this.blob.slice(start);
+        if (length) {
+            b = this.blob.webkitSlice(start, start + length);
+        } else {
+            b = this.blob.webkitSlice(start);
+        }
     }
     return new BlobFetchable(b);
 }
@@ -1473,7 +1523,7 @@ URLFetchable.prototype.slice = function(s, l) {
 }
 
 var seed=0;
-var isIOS = navigator.userAgent.indexOf('Mobile') >= 0;
+var isIOS = navigator.userAgent.indexOf('Safari') >= 0 && navigator.userAgent.indexOf('Chrome') < 0 ;
 
 URLFetchable.prototype.fetch = function(callback, attempt, truncatedLength) {
     var thisB = this;
@@ -1487,7 +1537,7 @@ URLFetchable.prototype.fetch = function(callback, attempt, truncatedLength) {
     var length;
     var url = this.url;
     if (isIOS) {
-        // dlog('On IOS');
+        // console.log('Safari hack');
         url = url + '?salt=' + (++seed);
     }
     req.open('GET', url, true);
@@ -1625,7 +1675,7 @@ function Browser(opts) {
 
     // Visual config.
 
-    this.tierBackgroundColors = [ /* "rgb(245,245,245)", "rgb(230,230,250)"  */ 'white'];
+    this.tierBackgroundColors = ["rgb(245,245,245)", "rgb(230,230,250)" /* 'white' */];
     this.minTierHeight = 25;
 
     this.browserLinks = {
@@ -1662,6 +1712,7 @@ Browser.prototype.realInit = function() {
         this.restoreStatus();
     }
 
+    var helpPopup;
     var thisB = this;
     this.browserHolder = document.getElementById(this.pageName);
     removeChildren(this.browserHolder);
@@ -1734,7 +1785,7 @@ Browser.prototype.realInit = function() {
     */
 
     var keyHandler = function(ev) {
-        if (ev.keyCode == 13) {
+        if (ev.keyCode == 13) { // enter
             var layoutsChanged = false;
             for (var ti = 0; ti < thisB.tiers.length; ++ti) {
                 var t = thisB.tiers[ti];
@@ -1748,7 +1799,7 @@ Browser.prototype.realInit = function() {
             if (layoutsChanged) {
                 thisB.arrangeTiers();
             }
-        } else if (ev.keyCode == 32 || ev.charCode == 32) {
+        } else if (ev.keyCode == 32 || ev.charCode == 32) { // space
             // if (!thisB.snapZoomLockout) {
                 if (!thisB.isSnapZooming) {
                     thisB.isSnapZooming = true;
@@ -1772,7 +1823,7 @@ Browser.prototype.realInit = function() {
                 thisB.snapZoomLockout = true;
             // }
             ev.stopPropagation(); ev.preventDefault();      
-        } else if (ev.keyCode == 39) {
+        } else if (ev.keyCode == 39) { // right arrow
             ev.stopPropagation(); ev.preventDefault();
             if (ev.ctrlKey) {
                 var fedge = 0;
@@ -1810,7 +1861,7 @@ Browser.prototype.realInit = function() {
             } else {
                 thisB.move(ev.shiftKey ? 100 : 25);
             }
-        } else if (ev.keyCode == 37) {
+        } else if (ev.keyCode == 37) { // left arrow
             ev.stopPropagation(); ev.preventDefault();
             if (ev.ctrlKey) {
                 var fedge = 0;
@@ -1848,16 +1899,22 @@ Browser.prototype.realInit = function() {
             } else {
                 thisB.move(ev.shiftKey ? -100 : -25);
             }
-        } else if (ev.keyCode == 38 || ev.keyCode == 87) {
+        } else if (ev.keyCode == 38 || ev.keyCode == 87) { // up arrow | w
             ev.stopPropagation(); ev.preventDefault();
 
             if (ev.shiftKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
                 var ch = tt.forceHeight || tt.subtiers[0].height;
                 if (ch >= 20) {
-                    tt.forceHeight = ch - 20;
+                    tt.forceHeight = ch - 10;
                     tt.draw();
                 }
+            } else if (ev.ctrlKey) {
+                var tt = thisB.tiers[thisB.selectedTier];
+                if (tt.dasSource.quantLeapThreshold) {
+                    tt.dasSource.quantLeapThreshold += 0.5;
+                    tt.draw();
+                }                
             } else {
                 if (thisB.selectedTier > 0) {
                     thisB.setSelectedTier(thisB.selectedTier - 1);
@@ -1865,7 +1922,7 @@ Browser.prototype.realInit = function() {
                     thisB.notifyTierSelectionWrap(-1);
                 }
             }
-        } else if (ev.keyCode == 40 || ev.keyCode == 83) {
+        } else if (ev.keyCode == 40 || ev.keyCode == 83) { // down arrow | s
             ev.stopPropagation(); ev.preventDefault();
 
             if (ev.shiftKey) {
@@ -1873,18 +1930,44 @@ Browser.prototype.realInit = function() {
                 var ch = tt.forceHeight || tt.subtiers[0].height;
                 tt.forceHeight = ch + 10;
                 tt.draw();
+            } else if (ev.ctrlKey) {
+                var tt = thisB.tiers[thisB.selectedTier];
+                if (tt.dasSource.quantLeapThreshold && tt.dasSource.quantLeapThreshold > 2) {
+                    tt.dasSource.quantLeapThreshold -= 0.5;
+                    tt.draw();
+                }                
             } else {
                 if (thisB.selectedTier < thisB.tiers.length -1) {
                     thisB.setSelectedTier(thisB.selectedTier + 1);
                 }
             }
-        } else if (ev.keyCode == 187 || ev.keyCode == 61) {
+        } else if (ev.keyCode == 187 || ev.keyCode == 61) { // +
             ev.stopPropagation(); ev.preventDefault();
             thisB.zoomStep(-10);
-        } else if (ev.keyCode == 189 || ev.keyCode == 173) {
+        } else if (ev.keyCode == 189 || ev.keyCode == 173) { // -
             ev.stopPropagation(); ev.preventDefault();
             thisB.zoomStep(10);
-        } else if (ev.keyCode == 84 || ev.keyCode == 116) {
+        } else if (ev.keyCode == 72 || ev.keyCode == 104) { // h
+            ev.stopPropagation(); ev.preventDefault();
+            if (helpPopup && helpPopup.displayed) {
+                b.removeAllPopups();
+            } else {
+                var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
+                helpPopup = b.popit(ev, 'Help', helpFrame, {width: 500});
+            }
+        } else if (ev.keyCode == 73 || ev.keyCode == 105) { // i
+            ev.stopPropagation(); ev.preventDefault();
+            var t = thisB.tiers[thisB.selectedTier];
+            if (!t.infoVisible) {
+                t.infoElement.style.display = 'block';
+                t.updateHeight();
+                t.infoVisible = true;
+            } else {
+                t.infoElement.style.display = 'none';
+                t.updateHeight();
+                t.infoVisible = false;
+            }
+        } else if (ev.keyCode == 84 || ev.keyCode == 116) { // t
             ev.stopPropagation(); ev.preventDefault();
             var bumpStatus;
             if( ev.shiftKey ){
@@ -2084,7 +2167,8 @@ Browser.prototype.realMakeTier = function(source) {
         borderWidth: '1px'});
     
     var vph = makeElement('div', [viewport, viewportOverlay], {}, {display: 'inline-block', position: 'relative', width: '100%' , overflowX: 'hidden', overflowY: 'hidden'});
-    vph.className = 'tier-viewport-background';
+    // vph.className = 'tier-viewport-background';
+    vph.style.background = background;
 
     vph.addEventListener('touchstart', function(ev) {return thisB.touchStartHandler(ev)}, false);
     vph.addEventListener('touchmove', function(ev) {return thisB.touchMoveHandler(ev)}, false);
@@ -2341,6 +2425,7 @@ Browser.prototype.realMakeTier = function(source) {
                     }
                     thisB.tierHolder.appendChild(thisB.ruler);
                     tiersWereReordered = true;
+                    thisB.arrangeTiers();
                 }
                 break;
             }
@@ -2385,7 +2470,11 @@ Browser.prototype.refreshTier = function(tier) {
 }
 
 Browser.prototype.arrangeTiers = function() {
-    // Do we need anything like this now?
+    for (var ti = 0; ti < this.tiers.length; ++ti) {
+        var t = this.tiers[ti];
+        t.background = this.tierBackgroundColors[ti % this.tierBackgroundColors.length];
+        t.holder.style.background = t.background;
+    }
 }
 
 
@@ -2675,9 +2764,7 @@ Browser.prototype.removeTier = function(conf) {
     this.tiers.splice(target, 1);
     this.sources.splice(target, 1);
 
-    for (var ti = target; ti < this.tiers.length; ++ti) {
-        this.tiers[ti].background = this.tierBackgroundColors[ti % this.tierBackgroundColors.length];
-    }
+    this.arrangeTiers();
     
     this.notifyTier();
 }
@@ -2967,9 +3054,48 @@ function glyphLookup(glyphs, rx) {
 
 var TAGVAL_NOTE_RE = new RegExp('^([A-Za-z]+)=(.+)');
 
+Browser.prototype.addFeatureInfoPlugin = function(handler) {
+    if (!this.featureInfoPlugins) {
+        this.featureInfoPlugins = [];
+    }
+    this.featureInfoPlugins.push(handler);
+}
+
+function FeatureInfo(feature, group) {
+    var name = pick(group.type, feature.type);
+    var fid = pick(group.label, feature.label, group.id, feature.id);
+    if (fid && fid.indexOf('__dazzle') != 0) {
+        name = name + ': ' + fid;
+    }
+
+    this.feature = feature;
+    this.title = name;
+    this.sections = [];
+}
+
+FeatureInfo.prototype.setTitle = function(t) {
+    this.title = t;
+}
+
+FeatureInfo.prototype.add = function(label, info) {
+    if (typeof info === 'string') {
+        info = makeElement('span', info);
+    }
+    this.sections.push({label: label, info: info});
+}
+
 Browser.prototype.featurePopup = function(ev, feature, group) {
     if (!feature) feature = {};
     if (!group) group = {};
+    var featureInfo = new FeatureInfo(feature, group);
+    var fips = this.featureInfoPlugins || [];
+    for (fipi = 0; fipi < fips.length; ++fipi) {
+        try {
+            fips[fipi](feature, featureInfo);
+        } catch (e) {
+            console.log(e.stack || e);
+        }
+    }
 
     this.removeAllPopups();
 
@@ -2977,19 +3103,12 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
     table.style.width = '100%';
     table.style.margin = '0px';
 
-    var name = pick(group.type, feature.type);
-    var fid = pick(group.label, feature.label, group.id, feature.id);
-    if (fid && fid.indexOf('__dazzle') != 0) {
-        name = name + ': ' + fid;
-    }
-
     var idx = 0;
     if (feature.method) {
         var row = makeElement('tr', [
             makeElement('th', 'Method'),
             makeElement('td', feature.method)
         ]);
-        row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
         table.appendChild(row);
         ++idx;
     }
@@ -3013,7 +3132,6 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
             makeElement('th', 'Score'),
             makeElement('td', '' + feature.score)
         ]);
-        row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
         table.appendChild(row);
         ++idx;
     }
@@ -3026,7 +3144,6 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
                     return makeElement('div', makeElement('a', l.desc, {href: l.uri, target: '_new'}));
                 }))
             ]);
-            row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
             table.appendChild(row);
             ++idx;
         }
@@ -3046,13 +3163,19 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
                 makeElement('th', k),
                 makeElement('td', v)
             ]);
-            row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
             table.appendChild(row);
             ++idx;
         }
     }
 
-    this.popit(ev, name, table, {width: 400});
+    for (var fisi = 0; fisi < featureInfo.sections.length; ++fisi) {
+        var section = featureInfo.sections[fisi];
+        table.appendChild(makeElement('tr', [
+            makeElement('th', section.label),
+            makeElement('td', section.info)]));
+    }        
+
+    this.popit(ev, featureInfo.title, table, {width: 400});
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -4171,7 +4294,7 @@ Browser.prototype.popit = function(ev, name, ele, opts)
     var winWidth = window.innerWidth;
 
     var top = (my + 20);
-    var left = Math.min(mx - (width/2), (winWidth - width - 10));
+    var left = Math.min(mx - (width/2), (winWidth - width - 30));
 
     var popup = makeElement('div');
     popup.className = 'popover fade bottom in';
@@ -4244,7 +4367,9 @@ Browser.prototype.popit = function(ev, name, ele, opts)
         displayed: true
     };
     popup.addEventListener('DOMNodeRemoved', function(ev) {
-        popupHandle.displayed = false;
+        if (ev.target == popup) {
+            popupHandle.displayed = false;
+        }
     }, false);
     return popupHandle;
 }
@@ -4270,11 +4395,15 @@ function isDasBooleanTrue(s) {
 function SubTier() {
     this.glyphs = [];
     this.height = 0;
+    this.quant = null;
 }
 
 SubTier.prototype.add = function(glyph) {
     this.glyphs.push(glyph);
     this.height = Math.max(this.height, glyph.height());
+    if (glyph.quant && this.quant == null) {
+	this.quant = glyph.quant;
+    }
 }
 
 SubTier.prototype.hasSpaceFor = function(glyph) {
@@ -4480,6 +4609,13 @@ function drawFeatureTier(tier)
         bumpedSTs = [unbumpedST].concat(bumpedSTs);
     }
 
+    for (var sti = 0; sti < bumpedSTs.length; ++sti) {
+	var st = bumpedSTs[sti];
+	if (st.quant) {
+	    st.glyphs.unshift(new GridGlyph(st.height));
+	}
+    }
+
     tier.subtiers = bumpedSTs;
     tier.glyphCacheOrigin = tier.browser.viewStart;
 }
@@ -4525,7 +4661,7 @@ DasTier.prototype.paint = function() {
 
     var gc = this.viewport.getContext('2d');
     gc.fillStyle = this.background;
-    gc.fillRect(0, 0, fpw, Math.max(lh, 200));
+    gc.clearRect(0, 0, fpw, Math.max(lh, 200));
     gc.restore();
 
     gc.save();
@@ -4548,6 +4684,18 @@ DasTier.prototype.paint = function() {
 	gc.translate(0, subtiers[s].height + MIN_PADDING);
     }
     gc.restore();
+
+    if (quant && this.dasSource.quantLeapThreshold) {
+	var ry = 3 + subtiers[0].height * (1.0 - ((this.dasSource.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
+
+	gc.save();
+	gc.strokeStyle = 'red';
+	gc.lineWidth = 0.3;
+	gc.moveTo(0, ry);
+	gc.lineTo(5000, ry);
+	gc.stroke();
+	gc.restore();
+    }
 
     if (quant && this.quantOverlay) {
 	this.quantOverlay.style.display = 'block';
@@ -4784,9 +4932,25 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 	var smin = tier.dasSource.forceMin || style.MIN || tier.currentFeaturesMinScore || 0;
 	var smax = tier.dasSource.forceMax || style.MAX || tier.currentFeaturesMaxScore || 10;
 	var yscale = ((1.0 * height) / (smax - smin));
+	var relScore = ((1.0 * score) - smin) / (smax-smin);
 	var sc = ((score - (1.0*smin)) * yscale)|0;
 	quant = {min: smin, max: smax};
-	gg = new PointGlyph((minPos + maxPos)/2, height-sc, height);
+
+	var fill = feature.override_color || style.BGCOLOR || style.COLOR1 || 'black';
+	if (style.COLOR2) {
+	    var grad = style._gradient;
+	    if (!grad) {
+		grad = makeGradient(50, style.COLOR1, style.COLOR2, style.COLOR3);
+		style._gradient = grad;
+	    }
+
+	    var step = (relScore*grad.length)|0;
+	    if (step < 0) step = 0;
+	    if (step >= grad.length) step = grad.length - 1;
+	    fill = grad[step];
+        } 
+
+	gg = new PointGlyph((minPos + maxPos)/2, height-sc, height, fill);
     } else if (gtype === '__SEQUENCE') {
 	var refSeq = null;
 	if (tier.currentSequence) {
@@ -4939,13 +5103,16 @@ function drawSeqTier(tier, seq)
 
     var fpw = tier.viewport.width|0; 
 
-    tier.viewport.height = 80;
-    tier.holder.style.height = '80px'
+    var height = 50;
+    if (seq && seq.seq) {
+	height += 25;
+    }
+    tier.viewport.height = height;
+    tier.holder.style.height = '' + height + 'px'
     tier.updateHeight();
 
     var gc = tier.viewport.getContext('2d');
-    gc.fillStyle = tier.background;
-    gc.fillRect(0, 0, fpw, tier.viewport.height);
+    gc.clearRect(0, 0, fpw, tier.viewport.height);
     gc.translate(1000,0);
 
     var seqTierMax = knownEnd;
@@ -4956,6 +5123,25 @@ function drawSeqTier(tier, seq)
     var pos = Math.max(0, ((knownStart / tile)|0) * tile);
     
     var origin = tier.browser.viewStart;
+
+    while (pos <= seqTierMax) {
+	gc.fillStyle = ((pos / tile) % 2 == 0) ? 'white' : 'black';
+	gc.strokeStyle = 'black';
+	gc.fillRect((pos - origin) * scale,
+		    8,
+		    tile*scale,
+		    3);
+	gc.strokeRect((pos - origin) * scale,
+		      8,
+		      tile*scale,
+		      3);
+
+	gc.fillStyle = 'black';
+	gc.fillText(formatLongInt(pos), ((pos - origin) * scale), 22);
+	
+
+	pos += tile;
+    }
 
     if (seq && seq.seq) {
 	for (var p = knownStart; p <= knownEnd; ++p) {
@@ -4969,32 +5155,13 @@ function drawSeqTier(tier, seq)
 		gc.fillStyle = color;
 
 		if (scale >= 8) {
-		    gc.fillText(base, (p - origin) * scale, 12);
+		    gc.fillText(base, (p - origin) * scale, 52);
 		} else {
-		    gc.fillRect((p - origin) * scale, 5, scale, 10); 
+		    gc.fillRect((p - origin) * scale, 42, scale, 12); 
 		}
 	    }
 	}
-    } else {
-	while (pos <= seqTierMax) {
-	    gc.fillStyle = ((pos / tile) % 2 == 0) ? 'white' : 'black';
-	    gc.strokeStyle = 'black';
-	    gc.fillRect((pos - origin) * scale,
-			8,
-			tile*scale,
-			3);
-	    gc.strokeRect((pos - origin) * scale,
-			  8,
-			  tile*scale,
-			  3);
-
-	    gc.fillStyle = 'black';
-	    gc.fillText(formatLongInt(pos), ((pos - origin) * scale), 22);
-	    
-
-	    pos += tile;
-	}
-    }
+    } 
 
     tier.norigin = tier.browser.viewStart;
     tier.viewport.style.left = '-1000px';
@@ -5014,7 +5181,30 @@ function svgSeqTier(tier, seq) {
     
     var origin = tier.browser.viewStart;
 
-    var  g = makeElementNS(NS_SVG, 'g'); 
+    var  g = makeElementNS(NS_SVG, 'g', [], {fontSize: '8pt'}); 
+    while (pos <= seqTierMax) {
+	g.appendChild(
+	    makeElementNS(
+		NS_SVG, 'rect',
+		null,
+		{x: (pos-origin)*scale,
+		 y: 8,
+		 width: tile*scale,
+		 height: 3,
+		 fill: ((pos / tile) % 2 == 0) ? 'white' : 'black',
+		 stroke: 'black'}));
+
+	g.appendChild(
+	    makeElementNS(
+		NS_SVG, 'text',
+		formatLongInt(pos),
+		{x: (pos-origin)*scale,
+		 y: 28,
+		 fill: 'black', stroke: 'none'}));
+	
+	pos += tile;
+    }
+
     if (seq && seq.seq) {
 	for (var p = knownStart; p <= knownEnd; ++p) {
 	    if (p >= seq.start && p <= seq.end) {
@@ -5030,44 +5220,22 @@ function svgSeqTier(tier, seq) {
 		    g.appendChild(
 			makeElementNS(NS_SVG, 'text', base, {
 			    x: (p-origin)*scale,
-			    y: 15,
+			    y: 52,
 			    fill: color}));
 		} else {
 		    g.appendChild(
 			makeElementNS(NS_SVG, 'rect', null, {
 			    x: (p - origin)*scale,
-			    y: 5,
+			    y: 42,
 			    width: scale,
-			    height: 10,
+			    height: 12,
 	                    fill: color}));
 
 		}
 	    }
 	}
-    } else {
-	while (pos <= seqTierMax) {
-	    g.appendChild(
-		makeElementNS(
-		    NS_SVG, 'rect',
-		    null,
-		    {x: (pos-origin)*scale,
-		     y: 8,
-		     width: tile*scale,
-		     height: 3,
-		     fill: ((pos / tile) % 2 == 0) ? 'white' : 'black',
-		     stroke: 'black'}));
+    } 
 
-	    g.appendChild(
-		makeElementNS(
-		    NS_SVG, 'text',
-		    '' + pos,
-		    {x: (pos-origin)*scale,
-		     y: 28,
-		     fill: 'black', stroke: 'none'}));
-
-	    pos += tile;
-	}
-    }
     return g;
 }
 function sortFeatures(tier)
@@ -5233,9 +5401,48 @@ function sortFeatures(tier)
 
 var TAGVAL_NOTE_RE = new RegExp('^([A-Za-z]+)=(.+)');
 
+Browser.prototype.addFeatureInfoPlugin = function(handler) {
+    if (!this.featureInfoPlugins) {
+        this.featureInfoPlugins = [];
+    }
+    this.featureInfoPlugins.push(handler);
+}
+
+function FeatureInfo(feature, group) {
+    var name = pick(group.type, feature.type);
+    var fid = pick(group.label, feature.label, group.id, feature.id);
+    if (fid && fid.indexOf('__dazzle') != 0) {
+        name = name + ': ' + fid;
+    }
+
+    this.feature = feature;
+    this.title = name;
+    this.sections = [];
+}
+
+FeatureInfo.prototype.setTitle = function(t) {
+    this.title = t;
+}
+
+FeatureInfo.prototype.add = function(label, info) {
+    if (typeof info === 'string') {
+        info = makeElement('span', info);
+    }
+    this.sections.push({label: label, info: info});
+}
+
 Browser.prototype.featurePopup = function(ev, feature, group) {
     if (!feature) feature = {};
     if (!group) group = {};
+    var featureInfo = new FeatureInfo(feature, group);
+    var fips = this.featureInfoPlugins || [];
+    for (fipi = 0; fipi < fips.length; ++fipi) {
+        try {
+            fips[fipi](feature, featureInfo);
+        } catch (e) {
+            console.log(e.stack || e);
+        }
+    }
 
     this.removeAllPopups();
 
@@ -5243,19 +5450,12 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
     table.style.width = '100%';
     table.style.margin = '0px';
 
-    var name = pick(group.type, feature.type);
-    var fid = pick(group.label, feature.label, group.id, feature.id);
-    if (fid && fid.indexOf('__dazzle') != 0) {
-        name = name + ': ' + fid;
-    }
-
     var idx = 0;
     if (feature.method) {
         var row = makeElement('tr', [
             makeElement('th', 'Method'),
             makeElement('td', feature.method)
         ]);
-        row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
         table.appendChild(row);
         ++idx;
     }
@@ -5279,7 +5479,6 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
             makeElement('th', 'Score'),
             makeElement('td', '' + feature.score)
         ]);
-        row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
         table.appendChild(row);
         ++idx;
     }
@@ -5292,7 +5491,6 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
                     return makeElement('div', makeElement('a', l.desc, {href: l.uri, target: '_new'}));
                 }))
             ]);
-            row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
             table.appendChild(row);
             ++idx;
         }
@@ -5312,13 +5510,19 @@ Browser.prototype.featurePopup = function(ev, feature, group) {
                 makeElement('th', k),
                 makeElement('td', v)
             ]);
-            row.style.backgroundColor = this.tierBackgroundColors[idx % this.tierBackgroundColors.length];
             table.appendChild(row);
             ++idx;
         }
     }
 
-    this.popit(ev, name, table, {width: 400});
+    for (var fisi = 0; fisi < featureInfo.sections.length; ++fisi) {
+        var section = featureInfo.sections[fisi];
+        table.appendChild(makeElement('tr', [
+            makeElement('th', section.label),
+            makeElement('td', section.info)]));
+    }        
+
+    this.popit(ev, featureInfo.title, table, {width: 400});
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -5509,14 +5713,6 @@ Karyoscape.prototype.setThumb = function() {
 }
             
 
-/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
-
-// 
-// Dalliance Genome Explorer
-// (c) Thomas Down 2006-2011
-//
-// kspace.js: Manage a block of Known Space
-//
 
 
 function FetchPool() {
@@ -5677,6 +5873,7 @@ KnownSpace.prototype.startFetchesForTiers = function(tiers) {
                 awaitedSeq.provide(seq);
             } else {
                 dlog('Noseq: ' + miniJSONify(err));
+                awaitedSeq.provide(null);
             }
         });
     } 
@@ -5748,9 +5945,9 @@ KnownSpace.prototype.provision = function(tier, chr, min, max, actualScale, want
             mayDownsample = true;
         }
         
-        // console.log('features=' + features.length + '; maybe=' + mayDownsample + '; actualScale=' + actualScale + '; thisScale=' + this.scale + '; wanted=' + wantedTypes);
+        // console.log('features=' + features.length + '; maybe=' + mayDownsample + '; actualScale=' + actualScale + '; thisScale=' + this.scale + '; wanted=' + wantedTypes);	
 
-        if ((actualScale < (this.scale/2) && features.length > 200) || 
+        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts.forceReduction)) ||
             (mayDownsample && wantedTypes && wantedTypes.length == 1 && wantedTypes.indexOf('density') >= 0))
         {
             features = downsample(features, this.scale);
@@ -5764,473 +5961,6 @@ KnownSpace.prototype.provision = function(tier, chr, min, max, actualScale, want
             tier.viewFeatures(chr, min, max, actualScale, features);
         }
     }
-}
-
-
-function DASFeatureSource(dasSource) {
-    this.dasSource = dasSource;
-}
-
-DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
-    if (types && types.length == 0) {
-        callback(null, [], scale);
-        return;
-    }
-
-    if (!this.dasSource.uri) {
-        return;
-    }
-
-    var tryMaxBins = (this.dasSource.maxbins !== false);
-    var fops = {
-        type: types
-    };
-    if (tryMaxBins) {
-        fops.maxbins = 1 + (((max - min) / scale) | 0);
-    }
-    
-    this.dasSource.features(
-        new DASSegment(chr, min, max),
-        fops,
-        function(features, status) {
-            var retScale = scale;
-            if (!tryMaxBins) {
-                retScale = 0.1;
-            }
-            callback(status, features, retScale);
-        }
-    );
-}
-
-function DASSequenceSource(dasSource) {
-    this.dasSource = dasSource;
-    this.awaitedEntryPoints = new Awaited();
-
-    var thisB = this;
-    this.dasSource.entryPoints(
-        function(ep) {
-            thisB.awaitedEntryPoints.provide(ep);
-        });
-}
-
-
-DASSequenceSource.prototype.fetch = function(chr, min, max, pool, callback) {
-    this.dasSource.sequence(
-        new DASSegment(chr, min, max),
-        function(seqs) {
-            if (seqs.length == 1) {
-                return callback(null, seqs[0]);
-            } else {
-                return callback("Didn't get sequence");
-            }
-        }
-    );
-}
-
-DASSequenceSource.prototype.getSeqInfo = function(chr, cnt) {
-    this.awaitedEntryPoints.await(function(ep) {
-        for (var epi = 0; epi < ep.length; ++epi) {
-            if (ep[epi].name == chr) {
-                return cnt({length: ep[epi].end});
-            }
-        }
-        return cnt();
-    });
-}
-    
-
-function TwoBitSequenceSource(source) {
-    var thisB = this;
-    this.source = source;
-    this.twoBit = new Awaited();
-    makeTwoBit(new URLFetchable(source.twoBitURI), function(tb, error) {
-        if (error) {
-            dlog(error);
-        } else {
-            thisB.twoBit.provide(tb);
-        }
-    });
-}
-
-TwoBitSequenceSource.prototype.fetch = function(chr, min, max, pool, callback) {
-        this.twoBit.await(function(tb) {
-            tb.fetch(chr, min, max,
-                     function(seq, err) {
-                         if (err) {
-                             return callback(err, null);
-                         } else {
-                             var sequence = new DASSequence(chr, min, max, 'DNA', seq);
-                             return callback(null, sequence);
-                         }
-                     })
-        });
-}
-
-TwoBitSequenceSource.prototype.getSeqInfo = function(chr, cnt) {
-    this.twoBit.await(function(tb) {
-        var seq = tb.getSeq(chr);
-        if (seq) {
-            tb.getSeq(chr).length(function(l) {
-                cnt({length: l});
-            });
-        } else {
-            cnt();
-        }
-    });
-}
-
-DASFeatureSource.prototype.getScales = function() {
-    return [];
-}
-
-var bwg_preflights = {};
-
-function BWGFeatureSource(bwgSource, opts) {
-    var thisB = this;
-    this.bwgSource = bwgSource;
-    this.opts = opts || {};
-    
-    thisB.bwgHolder = new Awaited();
-
-    if (this.opts.preflight) {
-        var pfs = bwg_preflights[this.opts.preflight];
-        if (!pfs) {
-            pfs = new Awaited();
-            bwg_preflights[this.opts.preflight] = pfs;
-
-            var req = new XMLHttpRequest();
-            req.onreadystatechange = function() {
-                if (req.readyState == 4) {
-                    if (req.status == 200) {
-                        pfs.provide('success');
-                    } else {
-                        pfs.provide('failure');
-                    }
-                }
-            };
-            // req.setRequestHeader('cache-control', 'no-cache');    /* Doesn't work, not an allowed request header in CORS */
-            req.open('get', this.opts.preflight + '?' + hex_sha1('salt' + Date.now()), true);    // Instead, ensure we always preflight a unique URI.
-            if (this.opts.credentials) {
-                req.withCredentials = true;
-            }
-            req.send('');
-        }
-        pfs.await(function(status) {
-            if (status === 'success') {
-                thisB.init();
-            }
-        });
-    } else {
-        thisB.init();
-    }
-}
-
-BWGFeatureSource.prototype.init = function() {
-    var thisB = this;
-    var make, arg;
-    if (this.bwgSource.bwgURI) {
-        make = makeBwgFromURL;
-        arg = this.bwgSource.bwgURI;
-    } else {
-        make = makeBwgFromFile;
-        arg = this.bwgSource.bwgBlob;
-    }
-
-    make(arg, function(bwg) {
-        thisB.bwgHolder.provide(bwg);
-    }, this.opts.credentials);
-}
-
-BWGFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
-    var thisB = this;
-    this.bwgHolder.await(function(bwg) {
-        if (bwg == null) {
-            return callback("Can't access binary file", null, null);
-        }
-
-        // dlog('bwg: ' + bwg.name + '; want scale: ' + scale);
-        var data;
-        // dlog(miniJSONify(types));
-        var wantDensity = !types || types.length == 0 || arrayIndexOf(types, 'density') >= 0;
-/*        if (wantDensity) {
-            dlog('want density; scale=' + scale);
-        } */
-        if (thisB.opts.clientBin) {
-            wantDensity = false;
-        }
-        if (bwg.type == 'bigwig' || wantDensity || (typeof thisB.opts.forceReduction !== 'undefined')) {
-            var zoom = -1;
-            for (var z = 0; z < bwg.zoomLevels.length; ++z) {
-                if (bwg.zoomLevels[z].reduction <= scale) {
-                    zoom = z;
-                } else {
-                    break;
-                }
-            }
-            if (typeof thisB.opts.forceReduction !== 'undefined') {
-                zoom = thisB.opts.forceReduction;
-            }
-           // dlog('selected zoom: ' + zoom);
-            if (zoom < 0) {
-                data = bwg.getUnzoomedView();
-            } else {
-                data = bwg.getZoomedView(zoom);
-            }
-        } else {
-            data = bwg.getUnzoomedView();
-        }
-        data.readWigData(chr, min, max, function(features) {
-            var fs = 1000000000;
-            if (bwg.type === 'bigwig') {
-                var is = (max - min) / features.length / 2;
-                if (is < fs) {
-                    fs = is;
-                }
-            }
-            if (thisB.opts.link) {
-                for (var fi = 0; fi < features.length; ++fi) {
-                    var f = features[fi];
-                    if (f.label) {
-                        f.links = [new DASLink('Link', thisB.opts.link.replace(/\$\$/, f.label))];
-                    }
-                }
-            }
-            callback(null, features, fs);
-        });
-    });
-}
-
-BWGFeatureSource.prototype.getScales = function() {
-    var bwg = this.bwgHolder.res;
-    if (bwg /* && bwg.type == 'bigwig' */) {
-        var scales = [1];  // Can we be smarter about inferring baseline scale?
-        for (var z = 0; z < bwg.zoomLevels.length; ++z) {
-            scales.push(bwg.zoomLevels[z].reduction);
-        }
-        return scales;
-    } else {
-        return null;
-    }
-}
-
-function BamblrFeatureSource(bamblrSource) {
-    this.bamblr = bamblrSource;
-}
-
-BamblrFeatureSource.prototype.getScales = function() {
-    return [];
-}
-
-BamblrFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
-    var rez = scale|0;
-    if (rez < 1) {
-        rez = 1;
-    }
-    var url = this.bamblr + '?seq=' + chr + '&min=' + min + '&max=' + max + '&rez=' + rez;
-    new URLFetchable(url).fetch(function(data) {
-        if (data == null) {
-            dlog('failing bamblr');
-            return;
-        } else {
-            var id = new Int32Array(data);
-            var features = [];
-            for (var ri = 0; ri < id.length; ++ri) {
-                var f = new DASFeature();
-                f.min = min + (ri * rez)
-                f.max = f.min + rez - 1;
-                f.segment = chr;
-                f.type = 'bamblr';
-                f.score = id[ri];
-                features.push(f);
-            }
-            callback(null, features, rez);
-            return;
-        }
-    });
-}
-
-function BAMFeatureSource(bamSource, opts) {
-    var thisB = this;
-    this.bamSource = bamSource;
-    this.opts = opts || {};
-    this.bamHolder = new Awaited();
-    
-    if (this.opts.preflight) {
-        var pfs = bwg_preflights[this.opts.preflight];
-        if (!pfs) {
-            pfs = new Awaited();
-            bwg_preflights[this.opts.preflight] = pfs;
-
-            var req = new XMLHttpRequest();
-            req.onreadystatechange = function() {
-                if (req.readyState == 4) {
-                    if (req.status == 200) {
-                        pfs.provide('success');
-                    } else {
-                        pfs.provide('failure');
-                    }
-                }
-            };
-            // req.setRequestHeader('cache-control', 'no-cache');    /* Doesn't work, not an allowed request header in CORS */
-            req.open('get', this.opts.preflight + '?' + hex_sha1('salt' + Date.now()), true);    // Instead, ensure we always preflight a unique URI.
-            if (this.opts.credentials) {
-                req.withCredentials = 'true';
-            }
-            req.send('');
-        }
-        pfs.await(function(status) {
-            if (status === 'success') {
-                thisB.init();
-            }
-        });
-    } else {
-        thisB.init();
-    }
-}
-
-BAMFeatureSource.prototype.init = function() {
-    var thisB = this;
-    var bamF, baiF;
-    if (this.bamSource.bamBlob) {
-        bamF = new BlobFetchable(this.bamSource.bamBlob);
-        baiF = new BlobFetchable(this.bamSource.baiBlob);
-    } else {
-        bamF = new URLFetchable(this.bamSource.bamURI, {credentials: this.opts.credentials});
-        baiF = new URLFetchable(this.bamSource.baiURI || (this.bamSource.bamURI + '.bai'), {credentials: this.opts.credentials});
-    }
-    makeBam(bamF, baiF, function(bam) {
-        thisB.bamHolder.provide(bam);
-    });
-}
-
-BAMFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
-    var thisB = this;
-    this.bamHolder.await(function(bam) {
-        bam.fetch(chr, min, max, function(bamRecords, error) {
-            if (error) {
-                callback(error, null, null);
-            } else {
-                var features = [];
-                for (var ri = 0; ri < bamRecords.length; ++ri) {
-                    var r = bamRecords[ri];
-                    var f = new DASFeature();
-                    f.min = r.pos + 1;
-                    f.max = r.pos + r.seq.length;
-                    f.segment = r.segment;
-                    f.type = 'bam';
-                    f.id = r.readName;
-                    f.notes = ['Sequence=' + r.seq, 'CIGAR=' + r.cigar, 'MQ=' + r.mq];
-                    f.seq = r.seq;
-                    features.push(f);
-                }
-                callback(null, features, 1000000000);
-            }
-        });
-    });
-}
-
-BAMFeatureSource.prototype.getScales = function() {
-    return 1000000000;
-}
-
-function MappedFeatureSource(source, mapping) {
-    this.source = source;
-    this.mapping = mapping;
-}
-
-MappedFeatureSource.prototype.getScales = function() {
-    return this.source.getScales();
-}
-
-MappedFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
-    var thisB = this;
-
-    this.mapping.sourceBlocksForRange(chr, min, max, function(mseg) {
-        if (mseg.length == 0) {
-            callback("No mapping available for this regions", [], scale);
-        } else {
-            var seg = mseg[0];
-            thisB.source.fetch(seg.name, seg.start, seg.end, scale, types, pool, function(status, features, fscale) {
-                var mappedFeatures = [];
-                if (features) {
-                    for (var fi = 0; fi < features.length; ++fi) {
-                        var f = features[fi];
-                        var sn = f.segment;
-                        if (sn.indexOf('chr') == 0) {
-                            sn = sn.substr(3);
-                        }
-                        var mmin = thisB.mapping.mapPoint(sn, f.min);
-                        var mmax = thisB.mapping.mapPoint(sn, f.max);
-                        if (!mmin || !mmax || mmin.seq != mmax.seq || mmin.seq != chr) {
-                            // Discard feature.
-                            // dlog('discarding ' + miniJSONify(f));
-                            if (f.parts && f.parts.length > 0) {    // FIXME: Ugly hack to make ASTD source map properly.
-                                 mappedFeatures.push(f);
-                            }
-                        } else {
-                            f.segment = mmin.seq;
-                            f.min = mmin.pos;
-                            f.max = mmax.pos;
-                            if (f.min > f.max) {
-                                var tmp = f.max;
-                                f.max = f.min;
-                                f.min = tmp;
-                            }
-                            if (mmin.flipped) {
-                                if (f.orientation == '-') {
-                                    f.orientation = '+';
-                                } else if (f.orientation == '+') {
-                                    f.orientation = '-';
-                                }
-                            }
-                            mappedFeatures.push(f);
-                        }
-                    }
-                }
-
-                callback(status, mappedFeatures, fscale);
-            });
-        }
-    });
-}
-
-function DummyFeatureSource() {
-}
-
-DummyFeatureSource.prototype.getScales = function() {
-    return null;
-}
-
-DummyFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, cnt) {
-    return cnt(null, [], 1000000000);
-}
-
-function DummySequenceSource() {
-}
-
-DummySequenceSource.prototype.fetch = function(chr, min, max, pool, cnt) {
-    return cnt(null, null);
-}
-
-function JBrowseFeatureSource(base, query) {
-    this.store = new JBrowseStore(base, query);
-}
-
-JBrowseFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
-    if (types && types.length == 0) {
-        callback(null, [], scale);
-        return;
-    }
-    
-    var fops = {};
-
-    this.store.features(
-        new DASSegment(chr, min, max),
-        fops,
-        function(features, status) {
-            callback(status, features, 100000);
-        }
-    );
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -7061,12 +6791,13 @@ function bit_rol(num, cnt)
 // svg-export.js
 //
 
-function saveSVG(b) {
+Browser.prototype.saveSVG = function() {
+    var b = this;
     var saveDoc = document.implementation.createDocument(NS_SVG, 'svg', null);
 
     var saveRoot = makeElementNS(NS_SVG, 'g', null, {
         fontFamily: 'helvetica',
-	fontSize: '10pt'
+	fontSize: '8pt'
     });
     saveDoc.documentElement.appendChild(saveRoot);
 
@@ -7097,18 +6828,13 @@ function saveSVG(b) {
 
     for (var ti = 0; ti < b.tiers.length; ++ti) {
         var tier = b.tiers[ti];
-
-	saveRoot.appendChild(
-	    makeElementNS(
-		NS_SVG, 'text',
-		tier.dasSource.name,
-		{x: 20, y: pos + 10}));
-
+	var tierSVG = makeElementNS(NS_SVG, 'g');
+	var tierTopPos = pos;
 
 	if (tier.dasSource.tier_type === 'sequence') {
 	    var seqTrack = svgSeqTier(tier, tier.currentSequence);
 	    
-	    tierHolder.appendChild(makeElementNS(NS_SVG, 'g', seqTrack, {transform: 'translate(' + (margin) + ', ' + pos + ')'}));
+	    tierSVG.appendChild(makeElementNS(NS_SVG, 'g', seqTrack, {transform: 'translate(' + (margin) + ', ' + pos + ')'}));
 	    pos += 80;
 	} else {
             if (!tier.subtiers) {
@@ -7124,11 +6850,20 @@ function saveSVG(b) {
                     var glyph = subtier.glyphs[gi];
                     glyphElements.push(glyph.toSVG());
 		}
-		tierHolder.appendChild(makeElementNS(NS_SVG, 'g', glyphElements, {transform: 'translate(' + (margin+offset) + ', ' + pos + ')'}));
+		tierSVG.appendChild(makeElementNS(NS_SVG, 'g', glyphElements, {transform: 'translate(' + (margin+offset) + ', ' + pos + ')'}));
 		pos += subtier.height + 3;
             }
 	    pos += 10;
 	}
+
+	saveRoot.appendChild(
+	    makeElementNS(
+		NS_SVG, 'text',
+		tier.dasSource.name,
+		{x: margin - 10, y: (pos+tierTopPos+12)/2, fontSize: '12pt', textAnchor: 'end'}));
+
+	tierHolder.appendChild(makeElementNS(NS_SVG, 'rect', null, {x: 0, y: tierTopPos, width: '10000', height: pos-tierTopPos, fill: tier.background}));
+	tierHolder.appendChild(tierSVG);
     }
     saveRoot.appendChild(tierHolder);
 
@@ -7325,8 +7060,6 @@ var __tier_idSeed = 0;
 
 function DasTier(browser, source, viewport, holder, overlay, placard, placardContent)
 {
-    var thisTier = this;
-
     this.id = 'tier' + (++__tier_idSeed);
     this.browser = browser;
     this.dasSource = new DASSource(source);
@@ -7344,191 +7077,7 @@ function DasTier(browser, source, viewport, holder, overlay, placard, placardCon
     this.y = 0;
     this.layoutWasDone = false;
 
-    var fs, ss;
-    if (this.dasSource.bwgURI || this.dasSource.bwgBlob) {
-        fs = new BWGFeatureSource(this.dasSource, {
-            credentials: this.dasSource.credentials,
-            preflight: this.dasSource.preflight,
-            clientBin: this.dasSource.clientBin,
-            forceReduction: this.dasSource.forceReduction,
-            link: this.dasSource.link
-        });
-        this.sourceFindNextFeature = function(chr, pos, dir, callback) {
-            fs.bwgHolder.res.getUnzoomedView().getFirstAdjacent(chr, pos, dir, function(res) {
-                    // dlog('got a result');
-                    if (res.length > 0 && res[0] != null) {
-                        callback(res[0]);
-                    }
-                });
-        };
-        this.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
-            fs.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, callback);
-        };
-
-        if (!this.dasSource.uri && !this.dasSource.stylesheet_uri && !this.dasSource.style) {
-            fs.bwgHolder.await(function(bwg) {
-                if (!bwg) {
-                    // Dummy version so that an error placard gets shown.
-                    thisTier.stylesheet = new DASStylesheet();
-                    return  thisTier.browser.refreshTier(thisTier);
-                }
-
-                if (thisTier.dasSource.collapseSuperGroups === undefined) {
-                    if (bwg.definedFieldCount == 12 && bwg.fieldCount >= 14) {
-                        thisTier.dasSource.collapseSuperGroups = true;
-                        thisTier.bumped = false;
-                    }
-                }
-
-                if (bwg.type == 'bigbed') {
-                    thisTier.stylesheet = new DASStylesheet();
-                    
-                    var wigStyle = new DASStyle();
-                    wigStyle.glyph = 'BOX';
-                    wigStyle.FGCOLOR = 'black';
-                    wigStyle.BGCOLOR = 'blue'
-                    wigStyle.HEIGHT = 8;
-                    wigStyle.BUMP = true;
-                    wigStyle.LABEL = true;
-                    wigStyle.ZINDEX = 20;
-                    thisTier.stylesheet.pushStyle({type: 'bigwig'}, null, wigStyle);
-
-                    wigStyle.glyph = 'BOX';
-                    wigStyle.FGCOLOR = 'black';
-                    wigStyle.BGCOLOR = 'red'
-                    wigStyle.HEIGHT = 10;
-                    wigStyle.BUMP = true;
-                    wigStyle.ZINDEX = 20;
-                    thisTier.stylesheet.pushStyle({type: 'bb-translation'}, null, wigStyle);
-                    
-                    var tsStyle = new DASStyle();
-                    tsStyle.glyph = 'BOX';
-                    tsStyle.FGCOLOR = 'black';
-                    tsStyle.BGCOLOR = 'white';
-                    tsStyle.HEIGHT = 10;
-                    tsStyle.ZINDEX = 10;
-                    tsStyle.BUMP = true;
-                    tsStyle.LABEL = true;
-                    thisTier.stylesheet.pushStyle({type: 'bb-transcript'}, null, tsStyle);
-
-                    var densStyle = new DASStyle();
-                    densStyle.glyph = 'HISTOGRAM';
-                    densStyle.COLOR1 = 'white';
-                    densStyle.COLOR2 = 'black';
-                    densStyle.HEIGHT=30;
-                    thisTier.stylesheet.pushStyle({type: 'density'}, null, densStyle);
-                } else {
-                    thisTier.stylesheet = new DASStylesheet();
-                    var wigStyle = new DASStyle();
-                    wigStyle.glyph = 'HISTOGRAM';
-                    wigStyle.COLOR1 = 'white';
-                    wigStyle.COLOR2 = 'black';
-                    wigStyle.HEIGHT=30;
-                    thisTier.stylesheet.pushStyle({type: 'default'}, null, wigStyle);
-                }
-                thisTier.browser.refreshTier(thisTier);
-            });
-        }
-    } else if (this.dasSource.bamURI || this.dasSource.bamBlob) {
-        fs = new BAMFeatureSource(this.dasSource, {
-            credentials: this.dasSource.credentials,
-            preflight: this.dasSource.preflight
-        });
-
-        if (!this.dasSource.uri && !this.dasSource.stylesheet_uri) {
-            fs.bamHolder.await(function(bam) {
-                thisTier.stylesheet = new DASStylesheet();
-                
-                var densStyle = new DASStyle();
-                densStyle.glyph = 'HISTOGRAM';
-                densStyle.COLOR1 = 'black';
-                densStyle.COLOR2 = 'red';
-                densStyle.HEIGHT=30;
-                thisTier.stylesheet.pushStyle({type: 'density'}, 'low', densStyle);
-                thisTier.stylesheet.pushStyle({type: 'density'}, 'medium', densStyle);
-
-                var wigStyle = new DASStyle();
-                wigStyle.glyph = '__SEQUENCE';
-                wigStyle.FGCOLOR = 'black';
-                wigStyle.BGCOLOR = 'blue'
-                wigStyle.HEIGHT = 8;
-                wigStyle.BUMP = true;
-                wigStyle.LABEL = false;
-                wigStyle.ZINDEX = 20;
-                thisTier.stylesheet.pushStyle({type: 'bam'}, 'high', wigStyle);
-//                thisTier.stylesheet.pushStyle({type: 'bam'}, 'medium', wigStyle);
-
-                thisTier.browser.refreshTier(thisTier);
-            });
-        }
-    } else if (this.dasSource.bamblrURI) {
-        fs = new BamblrFeatureSource(this.dasSource.bamblrURI);
-
-        if (!this.dasSource.uri && !this.dasSource.stylesheet_uri) {
-            thisTier.stylesheet = new DASStylesheet();
-            
-            var densStyle = new DASStyle();
-            densStyle.glyph = 'HISTOGRAM';
-            densStyle.COLOR1 = 'black';
-            densStyle.COLOR2 = 'red';
-            densStyle.HEIGHT=30;
-            thisTier.stylesheet.pushStyle({type: 'default'}, null, densStyle);
-            
-            thisTier.browser.refreshTier(thisTier);
-        }
-    } else if (this.dasSource.jbURI) {
-        fs = new JBrowseFeatureSource(this.dasSource.jbURI, this.dasSource.jbQuery);
-
-        this.stylesheet = new DASStylesheet();
-        var wigStyle = new DASStyle();
-        wigStyle.glyph = 'BOX';
-        wigStyle.FGCOLOR = 'black';
-        wigStyle.BGCOLOR = 'green'
-        wigStyle.HEIGHT = 8;
-        wigStyle.BUMP = true;
-        wigStyle.LABEL = true;
-        wigStyle.ZINDEX = 20;
-        this.stylesheet.pushStyle({type: 'default'}, null, wigStyle);
-    } else if (this.dasSource.tier_type == 'sequence') {
-        if (this.dasSource.twoBitURI) {
-            ss = new TwoBitSequenceSource(this.dasSource);
-        } else {
-            ss = new DASSequenceSource(this.dasSource);
-        }
-    } else {
-        fs = new DASFeatureSource(this.dasSource);
-        var dasAdjLock = false;
-        if (this.dasSource.capabilities && arrayIndexOf(this.dasSource.capabilities, 'das1:adjacent-feature') >= 0) {
-            this.sourceFindNextFeature = function(chr, pos, dir, callback) {
-                if (dasAdjLock) {
-                    return dlog('Already looking for a next feature, be patient!');
-                }
-                dasAdjLock = true;
-                var fops = {
-                    adjacent: chr + ':' + (pos|0) + ':' + (dir > 0 ? 'F' : 'B')
-                }
-                var types = thisTier.getDesiredTypes(thisTier.browser.scale);
-                if (types) {
-                    fops.types = types;
-                }
-                thisTier.dasSource.features(null, fops, function(res) {
-                    dasAdjLock = false;
-                    if (res.length > 0 && res[0] != null) {
-                        dlog('DAS adjacent seems to be working...');
-                        callback(res[0]);
-                    }
-                });
-            };
-        }
-    }
-    
-    if (this.dasSource.mapping) {
-        fs = new MappedFeatureSource(fs, this.browser.chains[this.dasSource.mapping]);
-    }
-
-    this.featureSource = fs;
-    this.sequenceSource = ss;
-    this.setBackground();
+    this.initSources();
 }
 
 DasTier.prototype.toString = function() {
@@ -7541,30 +7090,31 @@ DasTier.prototype.init = function() {
     if (tier.dasSource.style) {
         this.stylesheet = {styles: tier.dasSource.style};
         this.browser.refreshTier(this);
-    } else if (tier.dasSource.uri || tier.dasSource.stylesheet_uri) {
+    } else {
+        var ssSource;
+        if (tier.dasSource.stylesheet_uri) {
+            ssSource = new DASFeatureSource(tier.dasSource);
+        } else {
+            ssSource = tier.getSource();
+        }
         tier.status = 'Fetching stylesheet';
-        this.dasSource.stylesheet(function(stylesheet) {
-            tier.stylesheet = stylesheet;
-            tier.browser.refreshTier(tier);
-        }, function() {
-            // tier.error = 'No stylesheet';
-            tier.stylesheet = new DASStylesheet();
-            var defStyle = new DASStyle();
-            defStyle.glyph = 'BOX';
-            defStyle.BGCOLOR = 'blue';
-            defStyle.FGCOLOR = 'black';
-            tier.stylesheet.pushStyle({type: 'default'}, null, defStyle);
-            tier.browser.refreshTier(tier);
+        
+        ssSource.getStyleSheet(function(ss, err) {
+            if (err) {
+                tier.error = 'No stylesheet';
+                tier.stylesheet = new DASStylesheet();
+                var defStyle = new DASStyle();
+                defStyle.glyph = 'BOX';
+                defStyle.BGCOLOR = 'blue';
+                defStyle.FGCOLOR = 'black';
+                tier.stylesheet.pushStyle({type: 'default'}, null, defStyle);
+                tier.browser.refreshTier(tier);
+            } else {
+                tier.stylesheet = ss;
+                tier.browser.refreshTier(tier);
+            }
         });
-    } else if (tier.dasSource.twoBitURI) {
-        tier.stylesheet = new DASStylesheet();
-        var defStyle = new DASStyle();
-        defStyle.glyph = 'BOX';
-        defStyle.BGCOLOR = 'blue';
-        defStyle.FGCOLOR = 'black';
-        tier.stylesheet.pushStyle({type: 'default'}, null, defStyle);
-        tier.browser.refreshTier(tier);
-    };
+    }
 }
 
 DasTier.prototype.styles = function(scale) {
@@ -7619,7 +7169,6 @@ DasTier.prototype.needsSequence = function(scale ) {
     if (this.dasSource.tier_type === 'sequence' && scale < 5) {
         return true;
     } else if ((this.dasSource.bamURI || this.dasSource.bamBlob) && scale < 20) {
-        dlog('reqSeq');
         return true
     }
     return false;
@@ -7637,7 +7186,6 @@ DasTier.prototype.viewFeatures = function(chr, min, max, scale, features, sequen
     this.knownStart = min; this.knownEnd = max;
     this.status = null; this.error = null;
 
-    this.setBackground();
     this.draw();
 }
 
@@ -7680,17 +7228,6 @@ function zoomForScale(scale) {
     return ssScale;
 }
 
-
-DasTier.prototype.setBackground = function() {            
-    /*
-//    if (this.knownStart) {
-
-    var ks = this.knownStart || -100000000;
-    var ke = this.knownEnd || -100000001;
-        this.background.setAttribute('x', (ks - this.browser.origin) * this.browser.scale);
-        this.background.setAttribute('width', (ke - this.knownStart + 1) * this.browser.scale);
-//    }    */
-}
 
 DasTier.prototype.sourceFindNextFeature = function(chr, pos, dir, callback) {
     callback(null);
@@ -8437,12 +7974,7 @@ Browser.prototype.showTrackAdder = function(ev) {
     popup.appendChild(asform);
     makeStab(thisB.availableSources);
 
-    this.popit(ev, 'Add DAS data', popup, {width: 500});
-    this.trackAdderVisible = true;
-    popup.addEventListener('DOMNodeRemovedFromDocument', function(ev) {
-        // console.log('track-adder was removed');
-        thisB.trackAdderVisible = false;
-    }, false);
+    return this.popit(ev, 'Add DAS data', popup, {width: 500});
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -8939,7 +8471,7 @@ function Awaited() {
 }
 
 Awaited.prototype.provide = function(x) {
-    if (this.res) {
+    if (this.res !== undefined) {
         throw "Resource has already been provided.";
     }
 
@@ -8950,7 +8482,7 @@ Awaited.prototype.provide = function(x) {
 }
 
 Awaited.prototype.await = function(f) {
-    if (this.res) {
+    if (this.res !== undefined) {
         f(this.res);
         return this.res;
     } else {
@@ -8981,7 +8513,7 @@ var VERSION = {
     CONFIG: 3,
     MAJOR:  0,
     MINOR:  8,
-    MICRO:  6,
+    MICRO:  9,
     PATCH:  '',
     BRANCH: 'dev'
 }
@@ -9028,10 +8560,8 @@ function parseLocCardinal(n, m) {
 
 Browser.prototype.initUI = function(holder, genomePanel) {
     // FIXME shouldn't be hard-coded...
-    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/bootstrap-scoped.css'}));
-    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/dalliance-scoped.css'}));
-    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: + 'localhost:8080/' + 'css/bootstrap-scoped.css'}));
-    //document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: + 'localhost:8080/' + 'css/dalliance-scoped.css'}));
+    document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/bootstrap-scoped.css'}));
+    document.head.appendChild(makeElement('link', '', {rel: 'stylesheet', href: this.uiPrefix + 'css/dalliance-scoped.css'}));
 
     var b = this;
     var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):([0-9,]+)([KkMmGg])?([\-,\,.]+([0-9,]+)([KkMmGg])?)?/;
@@ -9041,8 +8571,7 @@ Browser.prototype.initUI = function(holder, genomePanel) {
         this.addFeatureListener(function(ev, hit) {
             b.featurePopup(ev, hit, null);
             
-			// P. Dopheide
-			// added code to function
+            // custom code
 			if(hit.typeId == "mutation"){ // could also use hit.type?
 				var url = 'http://localhost:8080/mutation?hit=' + hit.id
 				console.log(url);
@@ -9063,6 +8592,8 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 					}
 				});
 			}
+			// custom code
+			
         });
     }
 
@@ -9095,11 +8626,16 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     var svgBtn = makeElement('a', [makeElement('i', null, {className: 'icon-print'})], {className: 'btn'});
     var resetBtn = makeElement('a', [makeElement('i', null, {className: 'icon-refresh'})], {className: 'btn'});
     var optsButton = makeElement('a', [makeElement('i', null, {className: 'icon-cog'})], {className: 'btn'});
+
+    var helpButton = makeElement('a', [makeElement('i', null, {className: 'icon-info-sign'})], {className: 'btn'});
+    
     toolbar.appendChild(makeElement('div', [addTrackBtn,
                                             // favBtn,
                                             svgBtn,
                                             resetBtn,
                                             optsButton], {className: 'btn-group'}, {verticalAlign: 'top'}));
+
+    toolbar.appendChild(makeElement('div', [helpButton], {className: 'btn-group'}, {verticalAlign: 'top'}));
 
     holder.appendChild(toolbar);
     holder.appendChild(genomePanel);
@@ -9145,6 +8681,7 @@ Browser.prototype.initUI = function(holder, genomePanel) {
                     end = parseLocCardinal(m[5], m[6]);
                 } else {
                     var width = b.viewEnd - b.viewStart + 1;
+                    start = (parseLocCardinal(m[2], m[3]) - (width/2))|0;
                     end = start + width - 1;
                 }
                 b.setLocation(chr, start, end, setLocationCB);
@@ -9200,12 +8737,13 @@ Browser.prototype.initUI = function(holder, genomePanel) {
   });
 
 
-
+    
+    var trackAddPopup;
     addTrackBtn.addEventListener('click', function(ev) {
-        if (b.trackAdderVisible) {
+        if (trackAddPopup && trackAddPopup.displayed) {
             b.removeAllPopups();
         } else {
-            b.showTrackAdder(ev);
+            trackAddPopup = b.showTrackAdder(ev);
         }
     }, false);
     b.makeTooltip(addTrackBtn, 'Add a new track from the registry or an indexed file.');
@@ -9238,7 +8776,7 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 
     svgBtn.addEventListener('click', function(ev) {
        ev.stopPropagation(); ev.preventDefault();
-       saveSVG(b);
+        b.saveSVG();
     }, false);
     b.makeTooltip(svgBtn, 'Export publication-quality SVG.');
 
@@ -9273,14 +8811,15 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 				}
 			});
 		// custom code
-        
+		
     }, false);
     b.makeTooltip(resetBtn, 'Reset to default tracks and view.');
 
+    var optsPopup;
     optsButton.addEventListener('click', function(ev) {
         ev.stopPropagation(); ev.preventDefault();
 
-        if (b.optionsVisible) {
+        if (optsPopup && optsPopup.displayed) {
             b.removeAllPopups();
         } else {
             var optsForm = makeElement('form', null, {className: 'popover-content'});
@@ -9290,13 +8829,23 @@ Browser.prototype.initUI = function(holder, genomePanel) {
             }, false);
             optsForm.appendChild(makeElement('label', [scrollModeButton, 'Reverse trackpad scrolling'], {className: 'checkbox'}));
             b.removeAllPopups();
-            b.popit(ev, 'Options', optsForm, {width: 300});
-            b.optionsVisible = true;
-            optsForm.addEventListener('DOMNodeRemovedFromDocument', function(ev) {
-                b.optionsVisible = false;
-            }, false);
+            optsPopup = b.popit(ev, 'Options', optsForm, {width: 300});
         }
     }, false);
+    b.makeTooltip(optsButton, 'Configure options.');
+
+    var helpPopup;
+    helpButton.addEventListener('click', function(ev) {
+        ev.stopPropagation(); ev.preventDefault();
+
+        if (helpPopup && helpPopup.displayed) {
+            b.removeAllPopups();
+        } else {
+            var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
+            helpPopup = b.popit(ev, 'Help', helpFrame, {width: 500});
+        }
+    });
+    b.makeTooltip(helpButton, 'Help; Keyboard shortcuts.');
 
     b.addTierSelectionWrapListener(function(dir) {
         if (dir < 0) {
@@ -9368,6 +8917,7 @@ BoxGlyph.prototype.toSVG = function() {
 			  width: this._width, 
 			  height: this._height,
 			  stroke: this.stroke || 'none',
+			  strokeWidth: 0.5,
 			  fill: this.fill || 'none'});
 }
 
@@ -9520,7 +9070,7 @@ GroupGlyph.prototype.toSVG = function() {
 		{d: p.toPathData(),
 		 fill: 'none',
 		 stroke: 'black',
-		 strokeWidth: '1px'});
+		 strokeWidth: 0.5});
 	    g.appendChild(path);
 	}
     }
@@ -9563,16 +9113,6 @@ LineGraphGlyph.prototype.height = function() {
 
 LineGraphGlyph.prototype.draw = function(g) {
     g.save();
-    g.strokeStyle = 'black'
-    g.lineWidth = 0.1;
-
-    g.beginPath();
-    for (var y = 0; y <= this._height; y += 10) {
-	g.moveTo(-5000, y);
-	g.lineTo(5000, y);
-    }
-    g.stroke();
-
     g.strokeStyle = this.color;
     g.lineWidth = 2;
     g.beginPath();
@@ -10374,10 +9914,11 @@ SequenceGlyph.prototype.toSVG = function() {
 }
 
 
-function PointGlyph(x, y, height) {
+function PointGlyph(x, y, height, fill) {
     this._x = x;
     this._y = y;
     this._height = height;
+    this._fill = fill;
 }
 
 PointGlyph.prototype.min = function() {
@@ -10393,16 +9934,67 @@ PointGlyph.prototype.height = function() {
 }
 
 PointGlyph.prototype.draw = function(g) {
-    g.fillStyle = 'black';
+    g.fillStyle = this._fill;
     g.beginPath();
     g.arc(this._x, this._y, 2, 0, 6.29);
     g.fill();
 }
 
 PointGlyph.prototype.toSVG = function() {
-    return makeElementNS(NS_SVG, 'g');
+    return makeElementNS(
+	NS_SVG, 'circle',
+	null,
+	{cx: this._x, cy: this._y, r: 2,
+	 fill: this._fill,
+	 stroke: 'none'});
 }
-/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+
+function GridGlyph(height) {
+    this._height = height || 50;
+}
+
+GridGlyph.prototype.min = function() {
+    return -100000;
+};
+
+GridGlyph.prototype.max = function() {
+    return 100000;
+};
+
+GridGlyph.prototype.height = function() {
+    return this._height;
+}
+
+GridGlyph.prototype.draw = function(g) {
+    g.save();
+    g.strokeStyle = 'black'
+    g.lineWidth = 0.1;
+
+    g.beginPath();
+    for (var y = 0; y <= this._height; y += 10) {
+	g.moveTo(-5000, y);
+	g.lineTo(5000, y);
+    }
+    g.stroke();
+    g.restore();
+}
+
+GridGlyph.prototype.toSVG = function() {
+    var p = new SVGPath();
+    for (var y = 0; y <= this._height; y += 10) {
+	p.moveTo(-5000, y);
+	p.lineTo(5000, y);
+    }
+    
+    return makeElementNS(
+	NS_SVG, 'path',
+	null,
+	{d: p.toPathData(),
+	 fill: 'none',
+	 stroke: 'black',
+	 strokeWidth: '0.1px'});
+}/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 
 // Dalliance Genome Explorer
@@ -10488,6 +10080,697 @@ Browser.prototype.restoreStatus = function() {
 	this.sources = JSON.parse(sourceStr);
     }
 }
+/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+
+// 
+// Dalliance Genome Explorer
+// (c) Thomas Down 2006-2013
+//
+// sourceadapters.js
+//
+
+DasTier.prototype.initSources = function() {
+    var thisTier = this;
+    var fs = new DummyFeatureSource(), ss;
+
+    if (this.dasSource.bwgURI || this.dasSource.bwgBlob) {
+        fs = new BWGFeatureSource(this.dasSource);
+
+        this.sourceFindNextFeature = function(chr, pos, dir, callback) {
+            fs.bwgHolder.res.getUnzoomedView().getFirstAdjacent(chr, pos, dir, function(res) {
+                    if (res.length > 0 && res[0] != null) {
+                        callback(res[0]);
+                    }
+                });
+        };
+        this.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
+            var beforeQFNF = Date.now()|0;
+            var width = this.browser.viewEnd - this.browser.viewStart + 1;
+            pos = (pos +  ((width * dir) / 2))|0
+            fs.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, function(a, b) {
+                var afterQFNF = Date.now()|0;
+                console.log('QFNF took ' + (afterQFNF - beforeQFNF) + 'ms');
+                return callback(a, b);
+            });
+        };
+    } else if (this.dasSource.bamURI || this.dasSource.bamBlob) {
+        fs = new BAMFeatureSource(this.dasSource);
+    } else if (this.dasSource.bamblrURI) {
+        fs = new BamblrFeatureSource(this.dasSource);
+    } else if (this.dasSource.jbURI) {
+        fs = new JBrowseFeatureSource(this.dasSource);
+    } else if (this.dasSource.tier_type == 'sequence') {
+        if (this.dasSource.twoBitURI) {
+            ss = new TwoBitSequenceSource(this.dasSource);
+        } else {
+            ss = new DASSequenceSource(this.dasSource);
+        }
+    } else if (this.dasSource.tier_type == 'ensembl') {
+        fs = new EnsemblFeatureSource(this.dasSource);
+    } else {
+        fs = new DASFeatureSource(this.dasSource);
+        var dasAdjLock = false;
+        if (this.dasSource.capabilities && arrayIndexOf(this.dasSource.capabilities, 'das1:adjacent-feature') >= 0) {
+            this.sourceFindNextFeature = function(chr, pos, dir, callback) {
+                if (dasAdjLock) {
+                    return dlog('Already looking for a next feature, be patient!');
+                }
+                dasAdjLock = true;
+                var fops = {
+                    adjacent: chr + ':' + (pos|0) + ':' + (dir > 0 ? 'F' : 'B')
+                }
+                var types = thisTier.getDesiredTypes(thisTier.browser.scale);
+                if (types) {
+                    fops.types = types;
+                }
+                thisTier.dasSource.features(null, fops, function(res) {
+                    dasAdjLock = false;
+                    if (res.length > 0 && res[0] != null) {
+                        dlog('DAS adjacent seems to be working...');
+                        callback(res[0]);
+                    }
+                });
+            };
+        }
+    }
+    
+    if (this.dasSource.mapping) {
+        fs = new MappedFeatureSource(fs, this.browser.chains[this.dasSource.mapping]);
+    }
+
+    this.featureSource = fs;
+    this.sequenceSource = ss;
+}
+
+
+function DASFeatureSource(dasSource) {
+    this.dasSource = dasSource;
+}
+
+DASFeatureSource.prototype.getStyleSheet = function(callback) {
+    this.dasSource.stylesheet(function(stylesheet) {
+	callback(stylesheet);
+    }, function() {
+	callback(null, "Couldn't fetch DAS stylesheet");
+    });
+}
+
+DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
+    if (types && types.length == 0) {
+        callback(null, [], scale);
+        return;
+    }
+
+    if (!this.dasSource.uri) {
+        return;
+    }
+
+    var tryMaxBins = (this.dasSource.maxbins !== false);
+    var fops = {
+        type: types
+    };
+    if (tryMaxBins) {
+        fops.maxbins = 1 + (((max - min) / scale) | 0);
+    }
+    
+    this.dasSource.features(
+        new DASSegment(chr, min, max),
+        fops,
+        function(features, status) {
+            var retScale = scale;
+            if (!tryMaxBins) {
+                retScale = 0.1;
+            }
+            callback(status, features, retScale);
+        }
+    );
+}
+
+function DASSequenceSource(dasSource) {
+    this.dasSource = dasSource;
+    this.awaitedEntryPoints = new Awaited();
+
+    var thisB = this;
+    this.dasSource.entryPoints(
+        function(ep) {
+            thisB.awaitedEntryPoints.provide(ep);
+        });
+}
+
+
+DASSequenceSource.prototype.fetch = function(chr, min, max, pool, callback) {
+    this.dasSource.sequence(
+        new DASSegment(chr, min, max),
+        function(seqs) {
+            if (seqs.length == 1) {
+                return callback(null, seqs[0]);
+            } else {
+                return callback("Didn't get sequence");
+            }
+        }
+    );
+}
+
+DASSequenceSource.prototype.getSeqInfo = function(chr, cnt) {
+    this.awaitedEntryPoints.await(function(ep) {
+        for (var epi = 0; epi < ep.length; ++epi) {
+            if (ep[epi].name == chr) {
+                return cnt({length: ep[epi].end});
+            }
+        }
+        return cnt();
+    });
+}
+    
+
+function TwoBitSequenceSource(source) {
+    var thisB = this;
+    this.source = source;
+    this.twoBit = new Awaited();
+    makeTwoBit(new URLFetchable(source.twoBitURI), function(tb, error) {
+        if (error) {
+            dlog(error);
+        } else {
+            thisB.twoBit.provide(tb);
+        }
+    });
+}
+
+TwoBitSequenceSource.prototype.fetch = function(chr, min, max, pool, callback) {
+        this.twoBit.await(function(tb) {
+            tb.fetch(chr, min, max,
+                     function(seq, err) {
+                         if (err) {
+                             return callback(err, null);
+                         } else {
+                             var sequence = new DASSequence(chr, min, max, 'DNA', seq);
+                             return callback(null, sequence);
+                         }
+                     })
+        });
+}
+
+TwoBitSequenceSource.prototype.getSeqInfo = function(chr, cnt) {
+    this.twoBit.await(function(tb) {
+        var seq = tb.getSeq(chr);
+        if (seq) {
+            tb.getSeq(chr).length(function(l) {
+                cnt({length: l});
+            });
+        } else {
+            cnt();
+        }
+    });
+}
+
+DASFeatureSource.prototype.getScales = function() {
+    return [];
+}
+
+var bwg_preflights = {};
+
+function BWGFeatureSource(bwgSource) {
+    var thisB = this;
+    this.bwgSource = this.opts = bwgSource;    
+    thisB.bwgHolder = new Awaited();
+
+    if (this.opts.preflight) {
+        var pfs = bwg_preflights[this.opts.preflight];
+        if (!pfs) {
+            pfs = new Awaited();
+            bwg_preflights[this.opts.preflight] = pfs;
+
+            var req = new XMLHttpRequest();
+            req.onreadystatechange = function() {
+                if (req.readyState == 4) {
+                    if (req.status == 200) {
+                        pfs.provide('success');
+                    } else {
+                        pfs.provide('failure');
+                    }
+                }
+            };
+            req.open('get', this.opts.preflight + '?' + hex_sha1('salt' + Date.now()), true);    // Instead, ensure we always preflight a unique URI.
+            if (this.opts.credentials) {
+                req.withCredentials = true;
+            }
+            req.send('');
+        }
+        pfs.await(function(status) {
+            if (status === 'success') {
+                thisB.init();
+            }
+        });
+    } else {
+        thisB.init();
+    }
+}
+
+BWGFeatureSource.prototype.init = function() {
+    var thisB = this;
+    var make, arg;
+    if (this.bwgSource.bwgURI) {
+        make = makeBwgFromURL;
+        arg = this.bwgSource.bwgURI;
+    } else {
+        make = makeBwgFromFile;
+        arg = this.bwgSource.bwgBlob;
+    }
+
+    make(arg, function(bwg) {
+        thisB.bwgHolder.provide(bwg);
+    }, this.opts.credentials);
+}
+
+BWGFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
+    var thisB = this;
+    this.bwgHolder.await(function(bwg) {
+        if (bwg == null) {
+            return callback("Can't access binary file", null, null);
+        }
+
+        // dlog('bwg: ' + bwg.name + '; want scale: ' + scale);
+        var data;
+        // dlog(miniJSONify(types));
+        var wantDensity = !types || types.length == 0 || arrayIndexOf(types, 'density') >= 0;
+/*        if (wantDensity) {
+            dlog('want density; scale=' + scale);
+        } */
+        if (thisB.opts.clientBin) {
+            wantDensity = false;
+        }
+        if (bwg.type == 'bigwig' || wantDensity || (typeof thisB.opts.forceReduction !== 'undefined')) {
+            var zoom = -1;
+            for (var z = 0; z < bwg.zoomLevels.length; ++z) {
+                if (bwg.zoomLevels[z].reduction <= scale) {
+                    zoom = z;
+                } else {
+                    break;
+                }
+            }
+            if (typeof thisB.opts.forceReduction !== 'undefined') {
+                zoom = thisB.opts.forceReduction;
+            }
+           // dlog('selected zoom: ' + zoom);
+            if (zoom < 0) {
+                data = bwg.getUnzoomedView();
+            } else {
+                data = bwg.getZoomedView(zoom);
+            }
+        } else {
+            data = bwg.getUnzoomedView();
+        }
+        data.readWigData(chr, min, max, function(features) {
+            var fs = 1000000000;
+            if (bwg.type === 'bigwig') {
+                var is = (max - min) / features.length / 2;
+                if (is < fs) {
+                    fs = is;
+                }
+            }
+            if (thisB.opts.link) {
+                for (var fi = 0; fi < features.length; ++fi) {
+                    var f = features[fi];
+                    if (f.label) {
+                        f.links = [new DASLink('Link', thisB.opts.link.replace(/\$\$/, f.label))];
+                    }
+                }
+            }
+            callback(null, features, fs);
+        });
+    });
+}
+
+BWGFeatureSource.prototype.getScales = function() {
+    var bwg = this.bwgHolder.res;
+    if (bwg /* && bwg.type == 'bigwig' */) {
+        var scales = [1];  // Can we be smarter about inferring baseline scale?
+        for (var z = 0; z < bwg.zoomLevels.length; ++z) {
+            scales.push(bwg.zoomLevels[z].reduction);
+        }
+        return scales;
+    } else {
+        return null;
+    }
+}
+
+BWGFeatureSource.prototype.getStyleSheet = function(callback) {
+    this.bwgHolder.await(function(bwg) {
+        if (!bwg) {
+            return callback(null, 'bbi error');
+        }
+
+	/* What to do about this...?
+        if (thisTier.dasSource.collapseSuperGroups === undefined) {
+            if (bwg.definedFieldCount == 12 && bwg.fieldCount >= 14) {
+                thisTier.dasSource.collapseSuperGroups = true;
+                thisTier.bumped = false;
+            }
+        }*/
+
+	var stylesheet = new DASStylesheet();
+        if (bwg.type == 'bigbed') {
+            var wigStyle = new DASStyle();
+            wigStyle.glyph = 'BOX';
+            wigStyle.FGCOLOR = 'black';
+            wigStyle.BGCOLOR = 'blue'
+            wigStyle.HEIGHT = 8;
+            wigStyle.BUMP = true;
+            wigStyle.LABEL = true;
+            wigStyle.ZINDEX = 20;
+            stylesheet.pushStyle({type: 'bigwig'}, null, wigStyle);
+	    
+            wigStyle.glyph = 'BOX';
+            wigStyle.FGCOLOR = 'black';
+            wigStyle.BGCOLOR = 'red'
+            wigStyle.HEIGHT = 10;
+            wigStyle.BUMP = true;
+            wigStyle.ZINDEX = 20;
+            stylesheet.pushStyle({type: 'bb-translation'}, null, wigStyle);
+                    
+            var tsStyle = new DASStyle();
+            tsStyle.glyph = 'BOX';
+            tsStyle.FGCOLOR = 'black';
+            tsStyle.BGCOLOR = 'white';
+            tsStyle.HEIGHT = 10;
+            tsStyle.ZINDEX = 10;
+            tsStyle.BUMP = true;
+            tsStyle.LABEL = true;
+            stylesheet.pushStyle({type: 'bb-transcript'}, null, tsStyle);
+
+            var densStyle = new DASStyle();
+            densStyle.glyph = 'HISTOGRAM';
+            densStyle.COLOR1 = 'white';
+            densStyle.COLOR2 = 'black';
+            densStyle.HEIGHT=30;
+            stylesheet.pushStyle({type: 'density'}, null, densStyle);
+        } else {
+            var wigStyle = new DASStyle();
+            wigStyle.glyph = 'HISTOGRAM';
+            wigStyle.COLOR1 = 'white';
+            wigStyle.COLOR2 = 'black';
+            wigStyle.HEIGHT=30;
+            stylesheet.pushStyle({type: 'default'}, null, wigStyle);
+        }
+
+	return callback(stylesheet);
+    });
+}
+
+function BamblrFeatureSource(bamblrSource) {
+    this.bamblr = bamblrSource.bamblrURI;
+}
+
+BamblrFeatureSource.prototype.getScales = function() {
+    return [];
+}
+
+BamblrFeatureSource.prototype.getStyleSheet = function(callback) {
+    var stylesheet = new DASStylesheet();
+
+    var densStyle = new DASStyle();
+    densStyle.glyph = 'HISTOGRAM';
+    densStyle.COLOR1 = 'black';
+    densStyle.COLOR2 = 'red';
+    densStyle.HEIGHT=30;
+    stylesheet.pushStyle({type: 'default'}, null, densStyle);
+
+    return callback(stylesheet);
+}
+
+BamblrFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
+    var rez = scale|0;
+    if (rez < 1) {
+        rez = 1;
+    }
+    var url = this.bamblr + '?seq=' + chr + '&min=' + min + '&max=' + max + '&rez=' + rez;
+    new URLFetchable(url).fetch(function(data) {
+        if (data == null) {
+            dlog('failing bamblr');
+            return;
+        } else {
+            var id = new Int32Array(data);
+            var features = [];
+            for (var ri = 0; ri < id.length; ++ri) {
+                var f = new DASFeature();
+                f.min = min + (ri * rez)
+                f.max = f.min + rez - 1;
+                f.segment = chr;
+                f.type = 'bamblr';
+                f.score = id[ri];
+                features.push(f);
+            }
+            callback(null, features, rez);
+            return;
+        }
+    });
+}
+
+function BAMFeatureSource(bamSource) {
+    var thisB = this;
+    this.bamSource = bamSource;
+    this.opts = {credentials: bamSource.credentials, preflight: bamSource.preflight};
+    this.bamHolder = new Awaited();
+    
+    if (this.opts.preflight) {
+        var pfs = bwg_preflights[this.opts.preflight];
+        if (!pfs) {
+            pfs = new Awaited();
+            bwg_preflights[this.opts.preflight] = pfs;
+
+            var req = new XMLHttpRequest();
+            req.onreadystatechange = function() {
+                if (req.readyState == 4) {
+                    if (req.status == 200) {
+                        pfs.provide('success');
+                    } else {
+                        pfs.provide('failure');
+                    }
+                }
+            };
+            // req.setRequestHeader('cache-control', 'no-cache');    /* Doesn't work, not an allowed request header in CORS */
+            req.open('get', this.opts.preflight + '?' + hex_sha1('salt' + Date.now()), true);    // Instead, ensure we always preflight a unique URI.
+            if (this.opts.credentials) {
+                req.withCredentials = 'true';
+            }
+            req.send('');
+        }
+        pfs.await(function(status) {
+            if (status === 'success') {
+                thisB.init();
+            }
+        });
+    } else {
+        thisB.init();
+    }
+}
+
+BAMFeatureSource.prototype.init = function() {
+    var thisB = this;
+    var bamF, baiF;
+    if (this.bamSource.bamBlob) {
+        bamF = new BlobFetchable(this.bamSource.bamBlob);
+        baiF = new BlobFetchable(this.bamSource.baiBlob);
+    } else {
+        bamF = new URLFetchable(this.bamSource.bamURI, {credentials: this.opts.credentials});
+        baiF = new URLFetchable(this.bamSource.baiURI || (this.bamSource.bamURI + '.bai'), {credentials: this.opts.credentials});
+    }
+    makeBam(bamF, baiF, function(bam) {
+        thisB.bamHolder.provide(bam);
+    });
+}
+
+BAMFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
+    var thisB = this;
+    this.bamHolder.await(function(bam) {
+        bam.fetch(chr, min, max, function(bamRecords, error) {
+            if (error) {
+                callback(error, null, null);
+            } else {
+                var features = [];
+                for (var ri = 0; ri < bamRecords.length; ++ri) {
+                    var r = bamRecords[ri];
+                    var f = new DASFeature();
+                    f.min = r.pos + 1;
+                    f.max = r.pos + r.seq.length;
+                    f.segment = r.segment;
+                    f.type = 'bam';
+                    f.id = r.readName;
+                    f.notes = ['Sequence=' + r.seq, 'CIGAR=' + r.cigar, 'MQ=' + r.mq];
+                    f.seq = r.seq;
+                    features.push(f);
+                }
+                callback(null, features, 1000000000);
+            }
+        });
+    });
+}
+
+BAMFeatureSource.prototype.getScales = function() {
+    return 1000000000;
+}
+
+BAMFeatureSource.prototype.getStyleSheet = function(callback) {
+    this.bamHolder.await(function(bam) {
+	var stylesheet = new DASStylesheet();
+                
+        var densStyle = new DASStyle();
+        densStyle.glyph = 'HISTOGRAM';
+        densStyle.COLOR1 = 'black';
+        densStyle.COLOR2 = 'red';
+        densStyle.HEIGHT=30;
+        stylesheet.pushStyle({type: 'density'}, 'low', densStyle);
+        stylesheet.pushStyle({type: 'density'}, 'medium', densStyle);
+
+        var wigStyle = new DASStyle();
+        wigStyle.glyph = '__SEQUENCE';
+        wigStyle.FGCOLOR = 'black';
+        wigStyle.BGCOLOR = 'blue'
+        wigStyle.HEIGHT = 8;
+        wigStyle.BUMP = true;
+        wigStyle.LABEL = false;
+        wigStyle.ZINDEX = 20;
+        stylesheet.pushStyle({type: 'bam'}, 'high', wigStyle);
+	//                thisTier.stylesheet.pushStyle({type: 'bam'}, 'medium', wigStyle);
+
+	return callback(stylesheet);
+    });
+}
+
+function MappedFeatureSource(source, mapping) {
+    this.source = source;
+    this.mapping = mapping;
+}
+
+MappedFeatureSource.prototype.getStyleSheet = function(callback) {
+    return this.source.getStyleSheet(callback);
+}
+
+MappedFeatureSource.prototype.getScales = function() {
+    return this.source.getScales();
+}
+
+MappedFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
+    var thisB = this;
+
+    this.mapping.sourceBlocksForRange(chr, min, max, function(mseg) {
+        if (mseg.length == 0) {
+            callback("No mapping available for this regions", [], scale);
+        } else {
+            var seg = mseg[0];
+            thisB.source.fetch(seg.name, seg.start, seg.end, scale, types, pool, function(status, features, fscale) {
+                var mappedFeatures = [];
+                if (features) {
+                    for (var fi = 0; fi < features.length; ++fi) {
+                        var f = features[fi];
+                        var sn = f.segment;
+                        if (sn.indexOf('chr') == 0) {
+                            sn = sn.substr(3);
+                        }
+                        var mmin = thisB.mapping.mapPoint(sn, f.min);
+                        var mmax = thisB.mapping.mapPoint(sn, f.max);
+                        if (!mmin || !mmax || mmin.seq != mmax.seq || mmin.seq != chr) {
+                            // Discard feature.
+                            // dlog('discarding ' + miniJSONify(f));
+                            if (f.parts && f.parts.length > 0) {    // FIXME: Ugly hack to make ASTD source map properly.
+                                 mappedFeatures.push(f);
+                            }
+                        } else {
+                            f.segment = mmin.seq;
+                            f.min = mmin.pos;
+                            f.max = mmax.pos;
+                            if (f.min > f.max) {
+                                var tmp = f.max;
+                                f.max = f.min;
+                                f.min = tmp;
+                            }
+                            if (mmin.flipped) {
+                                if (f.orientation == '-') {
+                                    f.orientation = '+';
+                                } else if (f.orientation == '+') {
+                                    f.orientation = '-';
+                                }
+                            }
+                            mappedFeatures.push(f);
+                        }
+                    }
+                }
+
+                callback(status, mappedFeatures, fscale);
+            });
+        }
+    });
+}
+
+function DummyFeatureSource() {
+}
+
+DummyFeatureSource.prototype.getScales = function() {
+    return null;
+}
+
+DummyFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, cnt) {
+    return cnt(null, [], 1000000000);
+}
+
+DummyFeatureSource.prototype.getStyleSheet = function(callback) {
+    var stylesheet = new DASStylesheet();
+    var defStyle = new DASStyle();
+    defStyle.glyph = 'BOX';
+    defStyle.BGCOLOR = 'blue';
+    defStyle.FGCOLOR = 'black';
+    stylesheet.pushStyle({type: 'default'}, null, defStyle);
+    return callback(stylesheet);
+}
+
+function DummySequenceSource() {
+}
+
+DummySequenceSource.prototype.fetch = function(chr, min, max, pool, cnt) {
+    return cnt(null, null);
+}
+
+function JBrowseFeatureSource(source) {
+    this.store = new JBrowseStore(source.jbURI, source.jbQuery);
+}
+
+JBrowseFeatureSource.prototype.getScales = function() {
+    return null;
+}
+
+JBrowseFeatureSource.prototype.getStyleSheet = function(callback) {
+    var stylesheet = new DASStylesheet();
+    var wigStyle = new DASStyle();
+    wigStyle.glyph = 'BOX';
+    wigStyle.FGCOLOR = 'black';
+    wigStyle.BGCOLOR = 'green'
+    wigStyle.HEIGHT = 8;
+    wigStyle.BUMP = true;
+    wigStyle.LABEL = true;
+    wigStyle.ZINDEX = 20;
+    stylesheet.pushStyle({type: 'default'}, null, wigStyle);
+
+    return callback(stylesheet);
+}
+
+JBrowseFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
+    if (types && types.length == 0) {
+        callback(null, [], scale);
+        return;
+    }
+    
+    var fops = {};
+
+    this.store.features(
+        new DASSegment(chr, min, max),
+        fops,
+        function(features, status) {
+            callback(status, features, 100000);
+        }
+    );
+}
+
+
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 

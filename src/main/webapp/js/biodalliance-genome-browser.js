@@ -3,7 +3,6 @@ new Browser({
    viewStart:    48601506,
    viewEnd:      48632700,
    cookieKey:    'human',
-   patientID:    'P292',
    
    coordSystem: {
        speciesName: 'Human',
@@ -33,19 +32,13 @@ new Browser({
                   collapseSuperGroups:  true,
                   provides_karyotype:   true,
                   provides_search:      true},
-                  {name:                'Cosmic Transcripts',
-                  desc:                 '',
-                  uri:                  'http://das.sanger.ac.uk/das/cosmic_transcripts_GRCh37',
-                  stylesheet_uri:       'http://localhost:8080/css/cosmic-transcripts.xml'},
                  {name:                 'GoNL',
                   desc:                 'Data from the GoNL project',
-                  uri:                  'http://localhost:8080/das/gonl'},
+                  uri:                  'http://localhost:8080/das/gonl',
+                  stylesheet_uri:       'http://localhost:8080/css/gonl-variants.xml'},
                  {name:                 'col7a1 mutations',
                   uri:                  'http://localhost:8080/das/col7a1',
-                  desc:                 'Patient mutations in the COL7A1 gene'},
-                 {name:                 'P292',
-                  uri:                  'http://localhost:8080/das/patient&pid=P292',
-                  desc:                 'experiment'}],
+                  desc:                 'Patient mutations in the COL7A1 gene'}],
    
    browserLinks: {
        Ensembl: 'http://www.ensembl.org/Homo_sapiens/Location/View?r=${chr}:${start}-${end}',
