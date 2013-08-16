@@ -1,4 +1,4 @@
-new Browser({
+var b = new Browser({
    chr:          '3',
    viewStart:    48601506,
    viewEnd:      48632700,
@@ -60,7 +60,7 @@ $.ajax({
 		console.log("Data returned : " + data);
 
 		if (typeof data == 'object') {
-			informationTable(data);
+			//informationTable(data);
 		}
 	},
 	error: function(jqXHR, textStatus, errorThrown) {

@@ -15,14 +15,21 @@ function informationTable(features){
 	
 	for(m in features.mut){
 		table += '<tr>';
-			table += '<td rowspan="2">' + features.mut[m].PatientID + '</td>';
+			table += '<td id="pid" rowspan="2">' + features.mut[m].PatientID + '</td>';
 			table += '<td>' + features.mut[m].cDNAchange1 + '</td>';
 			table += '<td>' + features.mut[m].ProteinChange1 + '</td>';
 			table += '<td>' + features.mut[m].ExonIntron1 + '</td>';
 			table += '<td>' + features.mut[m].Consequence1 + '</td>';
 			table += '<td rowspan="2">' + features.mut[m].Pheno + '</td>';
-			table += '<td rowspan="2">' + features.mut[m].PubMedID + '</td>';
-			table += '<td rowspan="2"><a href="' + features.mut[m].Reference + '">' + features.mut[m].Reference + '</a></td>';
+			
+			if(features.mut[m].Reference != ""){
+				table += '<td rowspan="2">' + features.mut[m].PubMedID + '</td>';
+				table += '<td rowspan="2"><a href="' + features.mut[m].Reference + '">' + features.mut[m].Reference + '</a></td>';
+			}else{
+				table += '<td rowspan="2">Unpublished</td>';
+				table += '<td rowspan="2">Unpublished</td>';
+			}
+			
 		table +='</tr>';
 		table +='<tr>';
 			table += '<td>' + features.mut[m].cDNAchange2 + '</td>';
@@ -34,35 +41,39 @@ function informationTable(features){
 	
 	table += '</tbody>';
 	
+	// jquery pseudo
+	$('#patientData').click(function(e) {
+		//alert('ai');
+		var t = e.text();
+		alert(t);
+	});
+	
 	results_div.addEventListener('click', function delegate(e){
 		var cell = e.target.innerText; // current cell
 		//var row = e.target.parentNode.innerText; // current row
-		patientClick(cell);
+		var pattern = /P\d+/g; // check if patient id
+		var pattern2 = /Patient P\d+/g; // check track name
+		var match = pattern.test(cell);
+		
+		if(match){ // check if we have a patient id
+			var source = [{name: 'Patient ' + cell,
+	                       uri: 'http://localhost:8080/das/patient&pid=' + cell,
+	                       desc: 'experiment',
+	                       stylesheet_uri: 'http://localhost:8080/css/patient-track.xml'}];
+        	
+        	// loop through tiers
+        	for(var i = b.tiers.length - 1; i >= 0; --i) {
+        		// if tier is 'Patient P\d+'
+        		if(pattern2.test(b.tiers[i].label.innerText)){
+        			// remove tier
+        			b.removeTier({index: i});
+        		}
+        	}
+        	
+        	// add new patient tier
+	        b.addTier(source[0]); // b comes from biodalliance-genome-browser.js
+	}
 	});
 	
 	results_div.innerHTML = table;
-}
-
-function patientClick(cell){
-	var pattern = /P\d+/g;
-	var match = pattern.test(cell);
-	this.sources = [];
-	var thisB = this;
-	
-	if(match){ // check if we have a patient id
-		var trackName = 'Patient';
-		var trackSource = 'http://localhost:8080/das/patient&pid=' + cell;
-		var source = [{name: 'P292',
-                       uri:  'http://localhost:8080/das/patient&pid=P292',
-                       desc: 'experiment'}];
-        
-        //Browser.prototype.makeTier(source[0]);
-        //Browser.addTier(source[0]);
-        thisB.addTier(source[0]);
-		
-		//alert(source[0].name);
-		alert(thisB);
-		// add track to browser
-		//DasTier();
-	}
 }

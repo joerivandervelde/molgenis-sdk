@@ -1619,7 +1619,8 @@ function Browser(opts) {
         opts = {};
     }
 
-    this.uiPrefix = 'http://www.biodalliance.org/canvas/';
+    //this.uiPrefix = 'http://www.biodalliance.org/canvas/';
+    this.uiPrefix = 'http://localhost:8080/';
 
     this.sources = [];
     this.tiers = [];
