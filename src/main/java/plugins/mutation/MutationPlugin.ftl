@@ -12,8 +12,8 @@
 	<div id="svgHolder"></div>
 	
 	<div id="tableHolder">
-		<table id="patientData" border="1">
-		</table>
+		<!--<table id="patientData" border="1">
+		</table>-->
 	</div>
 
 </#macro>

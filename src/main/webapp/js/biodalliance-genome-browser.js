@@ -60,7 +60,7 @@ $.ajax({
 		console.log("Data returned : " + data);
 
 		if (typeof data == 'object') {
-			//informationTable(data);
+			informationTable(data);
 		}
 	},
 	error: function(jqXHR, textStatus, errorThrown) {

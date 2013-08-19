@@ -465,6 +465,7 @@ function BigWig() {
 }
 
 BigWig.prototype.readChromTree = function(callback) {
+    console.log('readChromTree: udo=' + this.unzoomedDataOffset + '; cto=' + this.chromTreeOffset);
     var thisB = this;
     this.chromsToIDs = {};
     this.idsToChroms = {};
@@ -1618,7 +1619,6 @@ function Browser(opts) {
         opts = {};
     }
 
-	//custom code
     //this.uiPrefix = 'http://www.biodalliance.org/canvas/';
     this.uiPrefix = 'http://localhost:8080/';
 
@@ -1673,7 +1673,6 @@ function Browser(opts) {
     // Options.
     
     this.reverseScrolling = false;
-    this.rulerLocation = 'center';
 
     // Visual config.
 
@@ -1716,11 +1715,9 @@ Browser.prototype.realInit = function() {
 
     var helpPopup;
     var thisB = this;
-    this.browserHolderHolder = document.getElementById(this.pageName);
-    this.browserHolder = makeElement('div', null, {tabIndex: -1}, {outline: 'none'});
-    removeChildren(this.browserHolderHolder);
-    this.browserHolderHolder.appendChild(this.browserHolder);
-    this.svgHolder = makeElement('div', null, {}, {overflow: 'hidden', display: 'inline-block', width: '100%', fontSize: '10pt', outline: 'none'});
+    this.browserHolder = document.getElementById(this.pageName);
+    removeChildren(this.browserHolder);
+    this.svgHolder = makeElement('div', null, {tabIndex: 100}, {overflow: 'hidden', display: 'inline-block', width: '100%', fontSize: '10pt', outline: 'none'});
 
     this.initUI(this.browserHolder, this.svgHolder);
 
@@ -1743,7 +1740,7 @@ Browser.prototype.realInit = function() {
         thisB.resizeViewer();
     }, false);
 
-    this.ruler = makeElement('div', null, null, {width: '1px', height: '2000px', backgroundColor: 'blue', position: 'absolute', zIndex: '900', top: '0px'});
+    this.ruler = makeElement('div', null, null, {width: '1px', height: '2000px', backgroundColor: 'blue', position: 'absolute', zIndex: '900', left: '' + ((this.featurePanelWidth/2)|0) + 'px', top: '0px'});
     this.tierHolder.appendChild(this.ruler);
 
     // Dimension stuff
@@ -1909,21 +1906,14 @@ Browser.prototype.realInit = function() {
             if (ev.shiftKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
                 var ch = tt.forceHeight || tt.subtiers[0].height;
-                if (ch >= 40) {
+                if (ch >= 20) {
                     tt.forceHeight = ch - 10;
                     tt.draw();
                 }
             } else if (ev.ctrlKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
-  
-                if (tt.quantLeapThreshold) {
-                    var th = tt.subtiers[0].height;
-                    var tq = tt.subtiers[0].quant;
-                    if (!tq)
-                        return;
-
-                    var qscale = (tq.max - tq.min) / th;
-                    tt.quantLeapThreshold = tq.min + ((((tt.quantLeapThreshold - tq.min)/qscale)|0)+1)*qscale;
+                if (tt.dasSource.quantLeapThreshold) {
+                    tt.dasSource.quantLeapThreshold += 0.5;
                     tt.draw();
                 }                
             } else {
@@ -1943,20 +1933,10 @@ Browser.prototype.realInit = function() {
                 tt.draw();
             } else if (ev.ctrlKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
-
-                if (tt.quantLeapThreshold) {
-                    var th = tt.subtiers[0].height;
-                    var tq = tt.subtiers[0].quant;
-                    if (!tq)
-                        return;
-
-                    var qscale = (tq.max - tq.min) / th;
-                    var it = ((tt.quantLeapThreshold - tq.min)/qscale)|0;
-                    if (it > 1) {
-                        tt.quantLeapThreshold = tq.min + (it-1)*qscale;
-                        tt.draw();
-                    }
-                }
+                if (tt.dasSource.quantLeapThreshold && tt.dasSource.quantLeapThreshold > 2) {
+                    tt.dasSource.quantLeapThreshold -= 0.5;
+                    tt.draw();
+                }                
             } else {
                 if (thisB.selectedTier < thisB.tiers.length -1) {
                     thisB.setSelectedTier(thisB.selectedTier + 1);
@@ -1970,7 +1950,12 @@ Browser.prototype.realInit = function() {
             thisB.zoomStep(10);
         } else if (ev.keyCode == 72 || ev.keyCode == 104) { // h
             ev.stopPropagation(); ev.preventDefault();
-            b.toggleHelpPopup(ev);
+            if (helpPopup && helpPopup.displayed) {
+                b.removeAllPopups();
+            } else {
+                var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
+                helpPopup = b.popit(ev, 'Help', helpFrame, {width: 500});
+            }
         } else if (ev.keyCode == 73 || ev.keyCode == 105) { // i
             ev.stopPropagation(); ev.preventDefault();
             var t = thisB.tiers[thisB.selectedTier];
@@ -2016,14 +2001,28 @@ Browser.prototype.realInit = function() {
         }
     };
     var keyUpHandler = function(ev) {
+
         thisB.snapZoomLockout = false;
+/*
+        if (ev.keyCode == 32) {
+            if (thisB.isSnapZooming) {
+                thisB.isSnapZooming = false;
+                thisB.zoomSlider.setValue(thisB.savedZoom);
+                thisB.zoom(Math.exp((1.0 * thisB.savedZoom / thisB.zoomExpt)));
+                thisB.invalidateLayouts();
+                thisB.refresh();
+            }
+            ev.stopPropagation(); ev.preventDefault();
+        } */
     }
 
-    this.browserHolder.addEventListener('focus', function(ev) {
-        thisB.browserHolder.addEventListener('keydown', keyHandler, false);
+    this.svgHolder.addEventListener('focus', function(ev) {
+        // console.log('holder focussed');
+        thisB.svgHolder.addEventListener('keydown', keyHandler, false);
     }, false);
-    this.browserHolder.addEventListener('blur', function(ev) {
-        thisB.browserHolder.removeEventListener('keydown', keyHandler, false);
+    this.svgHolder.addEventListener('blur', function(ev) {
+        // console.log('holder blurred');
+        thisB.svgHolder.removeEventListener('keydown', keyHandler, false);
     }, false);
 
     // Popup support (does this really belong here? FIXME)
@@ -2047,8 +2046,6 @@ Browser.prototype.realInit = function() {
     thisB.arrangeTiers();
     thisB.refresh();
     thisB.setSelectedTier(1);
-
-    thisB.positionRuler();
 
 
     for (var ti = 0; ti < this.tiers.length; ++ti) {
@@ -2242,7 +2239,7 @@ Browser.prototype.realMakeTier = function(source) {
         
 
     vph.addEventListener('mousedown', function(ev) {
-        thisB.browserHolder.focus();
+        thisB.svgHolder.focus();
         ev.preventDefault();
         var br = vph.getBoundingClientRect();
         var rx = ev.clientX, ry = ev.clientY;
@@ -2338,7 +2335,6 @@ Browser.prototype.realMakeTier = function(source) {
         ev.stopPropagation(); ev.preventDefault();
         for (var ti = 0; ti < thisB.tiers.length; ++ti) {
             if (thisB.tiers[ti] === tier) {
-                thisB.browserHolder.focus();
                 if (ti != thisB.selectedTier) {
                     thisB.setSelectedTier(ti);
                     return;
@@ -2716,7 +2712,13 @@ Browser.prototype.resizeViewer = function(skipRefresh) {
             this.viewEnd = this.viewStart + wid - 1;
         }
 
-        this.positionRuler();
+        this.ruler.style.left = '' + ((this.featurePanelWidth/2)|0) + 'px';
+        for (var ti = 0; ti < this.tiers.length; ++ti) {
+            var q = this.tiers[ti].quantOverlay;
+            if (q) {
+                q.style.left = '' + ((this.featurePanelWidth/2)|0) + 'px';
+            }
+        }
 
         if (!skipRefresh) {
             this.spaceCheck();
@@ -2982,7 +2984,7 @@ Browser.prototype.setSelectedTier = function(t) {
         }
     }
     if (t != null) {
-        this.browserHolder.focus();
+        this.svgHolder.focus();
     }
 }
 
@@ -2996,38 +2998,6 @@ Browser.prototype.notifyTierSelectionWrap = function(i) {
             this.tierSelectionWrapListeners[fli](i);
         } catch (ex) {
             console.log(ex.stack);
-        }
-    }
-}
-
-Browser.prototype.positionRuler = function() {
-    var display = 'none';
-    var left = '';
-    var right = '';
-
-    if (this.rulerLocation == 'center') {
-        display = 'block';
-        left = '' + ((this.featurePanelWidth/2)|0) + 'px';
-    } else if (this.rulerLocation == 'left') {
-        display = 'block';
-        left = '0px';
-    } else if (this.rulerLocation == 'right') {
-        display = 'block';
-        right = '0px'
-    } else {
-        display = 'none';
-    }
-
-    this.ruler.style.display = display;
-    this.ruler.style.left = left;
-    this.ruler.style.right = right;
-
-    for (var ti = 0; ti < this.tiers.length; ++ti) {
-        var q = this.tiers[ti].quantOverlay;
-        if (q) {
-            q.style.display = display;
-            q.style.left = left;
-            q.style.right = right;
         }
     }
 }
@@ -3053,6 +3023,9 @@ Browser.prototype.featureDoubleClick = function(f, rx, ry) {
     var width = this.viewEnd - this.viewStart;
     this.setLocation(null, newMid - (width/2), newMid + (width/2));
 }
+
+
+
 
 function glyphLookup(glyphs, rx) {
     for (var gi = 0; gi < glyphs.length; ++gi) {
@@ -4310,20 +4283,13 @@ Browser.prototype.makeTooltip = function(ele, text)
 Browser.prototype.popit = function(ev, name, ele, opts)
 {
     var thisB = this;
-    if (!opts) 
+    if (!opts) {
         opts = {};
-    if (!ev) 
-        ev = {};
+    }
 
     var width = opts.width || 200;
 
-    var mx, my;
-
-    if (ev.clientX) {
-        var mx =  ev.clientX, my = ev.clientY;
-    } else {
-        mx = 500; my= 50;
-    }
+    var mx =  ev.clientX, my = ev.clientY;
     mx +=  document.documentElement.scrollLeft || document.body.scrollLeft;
     my +=  document.documentElement.scrollTop || document.body.scrollTop;
     var winWidth = window.innerWidth;
@@ -4332,7 +4298,7 @@ Browser.prototype.popit = function(ev, name, ele, opts)
     var left = Math.min(mx - (width/2), (winWidth - width - 30));
 
     var popup = makeElement('div');
-    popup.className = 'popover fade ' + (ev.clientX ? 'bottom ' : '') + 'in';
+    popup.className = 'popover fade bottom in';
     popup.style.display = 'block';
     popup.style.position = 'absolute';
     popup.style.top = '' + top + 'px';
@@ -4687,7 +4653,7 @@ DasTier.prototype.paint = function() {
 	lh = lh + subtiers[s].height + MIN_PADDING;
     }
     lh += 6
-    this.viewport.setAttribute('height', lh);
+    this.viewport.setAttribute('height', Math.max(lh, 50));
     this.viewport.style.left = '-1000px';
     this.holder.style.height = '' + Math.max(lh, 35) + 'px';
     this.updateHeight();
@@ -4720,8 +4686,8 @@ DasTier.prototype.paint = function() {
     }
     gc.restore();
 
-    if (quant && this.quantLeapThreshold && this.featureSource && this.featureSource.quantFindNextFeature) {
-	var ry = 3 + subtiers[0].height * (1.0 - ((this.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
+    if (quant && this.dasSource.quantLeapThreshold) {
+	var ry = 3 + subtiers[0].height * (1.0 - ((this.dasSource.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
 
 	gc.save();
 	gc.strokeStyle = 'red';
@@ -4732,60 +4698,31 @@ DasTier.prototype.paint = function() {
 	gc.restore();
     }
 
-    this.paintQuant();
-}
-
-DasTier.prototype.paintQuant = function() {
-    var quant;
-    if (this.subtiers && this.subtiers.length > 0)
-	quant = this.subtiers[0].quant;
-
     if (quant && this.quantOverlay) {
+	this.quantOverlay.style.display = 'block';
+
 	var h = this.viewport.height;
-	var w = this.quantOverlay.width;
 	this.quantOverlay.height = this.viewport.height;
 	var ctx = this.quantOverlay.getContext('2d');
 
         ctx.fillStyle = 'white'
         ctx.globalAlpha = 0.6;
-
-	if (this.browser.rulerLocation == 'right') {
-	    ctx.fillRect(w-30, 0, 30, 20);
-            ctx.fillRect(w-30, h-20, 30, 20);
-	} else {
-            ctx.fillRect(0, 0, 30, 20);
-            ctx.fillRect(0, h-20, 30, 20);
-	}
+        ctx.fillRect(0, 0, 30, 20);
+        ctx.fillRect(0, h-20, 30, 20);
         ctx.globalAlpha = 1.0;
 
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 1;
         ctx.beginPath();
-
-	if (this.browser.rulerLocation == 'right') {
-	    ctx.moveTo(w - 8, 3);
-            ctx.lineTo(w, 3);
-            ctx.lineTo(w, h-3);
-            ctx.lineTo(w - 8, h - 3);
-	} else {
-            ctx.moveTo(8, 3);
-            ctx.lineTo(0,3);
-            ctx.lineTo(0,h-3);
-            ctx.lineTo(8,h-3);
-	}
+        ctx.moveTo(8, 3);
+        ctx.lineTo(0,3);
+        ctx.lineTo(0,h-3);
+        ctx.lineTo(8,h-3);
         ctx.stroke();
 
         ctx.fillStyle = 'black';
-
-	if (this.browser.rulerLocation == 'right') {
-	    ctx.textAlign = 'right';
-	    ctx.fillText(formatQuantLabel(quant.max), w-8, 10);
-            ctx.fillText(formatQuantLabel(quant.min), w-8, h-5);
-	} else {
-	    ctx.textAlign = 'left';
-            ctx.fillText(formatQuantLabel(quant.max), 8, 10);
-            ctx.fillText(formatQuantLabel(quant.min), 8, h-5);
-	}
+        ctx.fillText(formatQuantLabel(quant.max), 8, 8);
+        ctx.fillText(formatQuantLabel(quant.min), 8, h-5);
     }
 }
 
@@ -6011,7 +5948,7 @@ KnownSpace.prototype.provision = function(tier, chr, min, max, actualScale, want
         
         // console.log('features=' + features.length + '; maybe=' + mayDownsample + '; actualScale=' + actualScale + '; thisScale=' + this.scale + '; wanted=' + wantedTypes);	
 
-        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts || !src.opts.forceReduction)) ||
+        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts.forceReduction)) ||
             (mayDownsample && wantedTypes && wantedTypes.length == 1 && wantedTypes.indexOf('density') >= 0))
         {
             features = downsample(features, this.scale);
@@ -7135,9 +7072,6 @@ function DasTier(browser, source, viewport, holder, overlay, placard, placardCon
     this.req = null;
     this.layoutHeight = 25;
     this.bumped = true; 
-    if (source.quantLeapThreshold) {
-        this.quantLeapThreshold = source.quantLeapThreshold;
-    }
     if (this.dasSource.collapseSuperGroups) {
         this.bumped = false;
     }
@@ -7296,11 +7230,17 @@ function zoomForScale(scale) {
 }
 
 
+DasTier.prototype.sourceFindNextFeature = function(chr, pos, dir, callback) {
+    callback(null);
+}
+
+DasTier.prototype.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
+    callback(null);
+}
+
 DasTier.prototype.findNextFeature = function(chr, pos, dir, fedge, callback) {
-    if (this.quantLeapThreshold) {
-        var width = this.browser.viewEnd - this.browser.viewStart + 1;
-        pos = (pos +  ((width * dir) / 2))|0
-        this.featureSource.quantFindNextFeature(chr, pos, dir, this.quantLeapThreshold, callback);
+    if (this.dasSource.quantLeapThreshold) {
+        this.quantFindNextFeature(chr, pos, dir, this.dasSource.quantLeapThreshold, callback);
     } else {
         if (this.knownStart && pos >= this.knownStart && pos <= this.knownEnd) {
             if (this.currentFeatures) {
@@ -7353,7 +7293,7 @@ DasTier.prototype.findNextFeature = function(chr, pos, dir, fedge, callback) {
             }
         }
 
-        this.featureSource.findNextFeature(chr, pos, dir, callback);
+        this.sourceFindNextFeature(chr, pos, dir, callback);
     }
 }
 
@@ -8641,12 +8581,13 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 					type: "GET",
 					dataType: "json",
 					success: function(data) {
-						console.log("Data returned : " + data);
-						
-						if (typeof data == 'object') {
-							informationTable(data);
-						}
-					},
+					console.log("Data returned : " + data);
+					
+					if (typeof data == 'object') {
+						informationTable(data);
+					}
+				
+				},
 					error: function(jqXHR, textStatus, errorThrown) {
 						console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
 					}
@@ -8685,9 +8626,9 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     var favBtn = makeElement('a', [makeElement('i', null, {className: 'icon-bookmark'})], {className: 'btn'});
     var svgBtn = makeElement('a', [makeElement('i', null, {className: 'icon-print'})], {className: 'btn'});
     var resetBtn = makeElement('a', [makeElement('i', null, {className: 'icon-refresh'})], {className: 'btn'});
-    var optsButton = makeElement('div', [makeElement('i', null, {className: 'icon-cog'})], {className: 'btn'});
+    var optsButton = makeElement('a', [makeElement('i', null, {className: 'icon-cog'})], {className: 'btn'});
 
-    var helpButton = makeElement('div', [makeElement('i', null, {className: 'icon-info-sign'})], {className: 'btn'});
+    var helpButton = makeElement('a', [makeElement('i', null, {className: 'icon-info-sign'})], {className: 'btn'});
     
     toolbar.appendChild(makeElement('div', [addTrackBtn,
                                             // favBtn,
@@ -8879,13 +8820,31 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     optsButton.addEventListener('click', function(ev) {
         ev.stopPropagation(); ev.preventDefault();
 
-        b.toggleOptsPopup(ev);
+        if (optsPopup && optsPopup.displayed) {
+            b.removeAllPopups();
+        } else {
+            var optsForm = makeElement('form', null, {className: 'popover-content'});
+            var scrollModeButton = makeElement('input', '', {type: 'checkbox', checked: b.reverseScrolling});
+            scrollModeButton.addEventListener('change', function(ev) {
+                b.reverseScrolling = scrollModeButton.checked;
+            }, false);
+            optsForm.appendChild(makeElement('label', [scrollModeButton, 'Reverse trackpad scrolling'], {className: 'checkbox'}));
+            b.removeAllPopups();
+            optsPopup = b.popit(ev, 'Options', optsForm, {width: 300});
+        }
     }, false);
     b.makeTooltip(optsButton, 'Configure options.');
 
+    var helpPopup;
     helpButton.addEventListener('click', function(ev) {
         ev.stopPropagation(); ev.preventDefault();
-        b.toggleHelpPopup(ev);
+
+        if (helpPopup && helpPopup.displayed) {
+            b.removeAllPopups();
+        } else {
+            var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
+            helpPopup = b.popit(ev, 'Help', helpFrame, {width: 500});
+        }
     });
     b.makeTooltip(helpButton, 'Help; Keyboard shortcuts.');
 
@@ -8897,53 +8856,6 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     });
 
   }
-
-Browser.prototype.toggleHelpPopup = function(ev) {
-    if (this.helpPopup && this.helpPopup.displayed) {
-        this.removeAllPopups();
-    } else {
-    	//custom code
-        //var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
-        var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'css/index.html'}, {width: '490px', height: '500px'});
-        this.helpPopup = this.popit(ev, 'Help', helpFrame, {width: 500});
-    }
-}
-
-Browser.prototype.toggleOptsPopup = function(ev) {
-    var b = this;
-
-    if (this.optsPopup && this.optsPopup.displayed) {
-        this.removeAllPopups();
-    } else {
-        var optsForm = makeElement('form', null, {className: 'popover-content form-horizontal'});
-
-        var scrollModeButton = makeElement('input', '', {type: 'checkbox', checked: b.reverseScrolling});
-        scrollModeButton.addEventListener('change', function(ev) {
-            b.reverseScrolling = scrollModeButton.checked;
-        }, false);
-        optsForm.appendChild(makeElement('div', [makeElement('label', 'Reverse trackpad scrolling', {className: 'control-label'}), scrollModeButton], {className: 'control-group'}));
-
-        var rulerSelect = makeElement('select');
-        rulerSelect.appendChild(makeElement('option', 'Left', {value: 'left'}));
-        rulerSelect.appendChild(makeElement('option', 'Center', {value: 'center'}));
-        rulerSelect.appendChild(makeElement('option', 'Right', {value: 'right'}));
-        rulerSelect.appendChild(makeElement('option', 'None', {value: 'none'}));
-        rulerSelect.value = b.rulerLocation;
-        rulerSelect.addEventListener('change', function(ev) {
-            b.rulerLocation = rulerSelect.value;
-            b.positionRuler();
-            for (var ti = 0; ti < b.tiers.length; ++ti) {
-                b.tiers[ti].paintQuant();
-            }
-        }, false);
-        optsForm.appendChild(makeElement('div', [makeElement('label', 'Display ruler', {className: 'control-label'}), rulerSelect], {className: 'control-group'}));
-        
-
-        this.removeAllPopups();
-        this.optsPopup = this.popit(ev, 'Options', optsForm, {width: 500});
-    }
-}
-
 // 
 // Dalliance Genome Explorer
 // (c) Thomas Down 2006-2010
@@ -10100,7 +10012,6 @@ Browser.prototype.nukeStatus = function() {
     delete localStorage['dalliance.' + this.cookieKey + '.version'];
 
     delete localStorage['dalliance.' + this.cookieKey + '.reverse-scrolling'];
-    delete localStorage['dalliance.' + this.cookieKey + '.ruler-location'];
 }
 
 Browser.prototype.storeStatus = function() {
@@ -10124,7 +10035,6 @@ Browser.prototype.storeStatus = function() {
     }
     localStorage['dalliance.' + this.cookieKey + '.sources'] = JSON.stringify(currentSourceList);
     localStorage['dalliance.' + this.cookieKey + '.reverse-scrolling'] = this.reverseScrolling;
-    localStorage['dalliance.' + this.cookieKey + '.ruler-location'] = this.rulerLocation;
     
     localStorage['dalliance.' + this.cookieKey + '.version'] = VERSION.CONFIG;
 }
@@ -10166,10 +10076,6 @@ Browser.prototype.restoreStatus = function() {
     var rs = localStorage['dalliance.' + this.cookieKey + '.reverse-scrolling'];
     this.reverseScrolling = (rs && rs == 'true');
 
-    var rl = localStorage['dalliance.' + this.cookieKey + '.ruler-location'];
-    if (rl)
-        this.rulerLocation = rl;
-
     var sourceStr = localStorage['dalliance.' + this.cookieKey + '.sources'];
     if (sourceStr) {
 	this.sources = JSON.parse(sourceStr);
@@ -10190,6 +10096,24 @@ DasTier.prototype.initSources = function() {
 
     if (this.dasSource.bwgURI || this.dasSource.bwgBlob) {
         fs = new BWGFeatureSource(this.dasSource);
+
+        this.sourceFindNextFeature = function(chr, pos, dir, callback) {
+            fs.bwgHolder.res.getUnzoomedView().getFirstAdjacent(chr, pos, dir, function(res) {
+                    if (res.length > 0 && res[0] != null) {
+                        callback(res[0]);
+                    }
+                });
+        };
+        this.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
+            var beforeQFNF = Date.now()|0;
+            var width = this.browser.viewEnd - this.browser.viewStart + 1;
+            pos = (pos +  ((width * dir) / 2))|0
+            fs.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, function(a, b) {
+                var afterQFNF = Date.now()|0;
+                console.log('QFNF took ' + (afterQFNF - beforeQFNF) + 'ms');
+                return callback(a, b);
+            });
+        };
     } else if (this.dasSource.bamURI || this.dasSource.bamBlob) {
         fs = new BAMFeatureSource(this.dasSource);
     } else if (this.dasSource.bamblrURI) {
@@ -10206,6 +10130,29 @@ DasTier.prototype.initSources = function() {
         fs = new EnsemblFeatureSource(this.dasSource);
     } else {
         fs = new DASFeatureSource(this.dasSource);
+        var dasAdjLock = false;
+        if (this.dasSource.capabilities && arrayIndexOf(this.dasSource.capabilities, 'das1:adjacent-feature') >= 0) {
+            this.sourceFindNextFeature = function(chr, pos, dir, callback) {
+                if (dasAdjLock) {
+                    return dlog('Already looking for a next feature, be patient!');
+                }
+                dasAdjLock = true;
+                var fops = {
+                    adjacent: chr + ':' + (pos|0) + ':' + (dir > 0 ? 'F' : 'B')
+                }
+                var types = thisTier.getDesiredTypes(thisTier.browser.scale);
+                if (types) {
+                    fops.types = types;
+                }
+                thisTier.dasSource.features(null, fops, function(res) {
+                    dasAdjLock = false;
+                    if (res.length > 0 && res[0] != null) {
+                        dlog('DAS adjacent seems to be working...');
+                        callback(res[0]);
+                    }
+                });
+            };
+        }
     }
     
     if (this.dasSource.mapping) {
@@ -10259,30 +10206,6 @@ DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
         }
     );
 }
-
-DASFeatureSource.prototype.findNextFeature = this.sourceFindNextFeature = function(chr, pos, dir, callback) {
-    if (this.dasSource.capabilities && arrayIndexOf(this.dasSource.capabilities, 'das1:adjacent-feature') >= 0) {
-        var thisB = this;
-        if (this.dasAdjLock) {
-            return dlog('Already looking for a next feature, be patient!');
-        }
-        this.dasAdjLock = true;
-        var fops = {
-            adjacent: chr + ':' + (pos|0) + ':' + (dir > 0 ? 'F' : 'B')
-        }
-        var types = thisTier.getDesiredTypes(thisTier.browser.scale);
-        if (types) {
-            fops.types = types;
-        }
-        thisTier.dasSource.features(null, fops, function(res) {
-            thisB.dasAdjLock = false;
-            if (res.length > 0 && res[0] != null) {
-                dlog('DAS adjacent seems to be working...');
-                callback(res[0]);
-            }
-        });
-    }
-};
 
 function DASSequenceSource(dasSource) {
     this.dasSource = dasSource;
@@ -10476,23 +10399,6 @@ BWGFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
             }
             callback(null, features, fs);
         });
-    });
-}
-
-BWGFeatureSource.prototype.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
-    var beforeQFNF = Date.now()|0;
-    this.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, function(a, b) {
-        var afterQFNF = Date.now()|0;
-        console.log('QFNF took ' + (afterQFNF - beforeQFNF) + 'ms');
-        return callback(a, b);
-    });
-}
-
-BWGFeatureSource.prototype.findNextFeature = function(chr, pos, dir, callback) {
-    this.bwgHolder.res.getUnzoomedView().getFirstAdjacent(chr, pos, dir, function(res) {
-        if (res.length > 0 && res[0] != null) {
-            callback(res[0]);
-        }
     });
 }
 
