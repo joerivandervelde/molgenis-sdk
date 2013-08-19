@@ -58,10 +58,10 @@ public class MutationPlugin extends PluginModel
 	// adding custom content to the html <header>
 	@Override
 	public String getCustomHtmlHeaders(){
-		return "<script language=\"javascript\" src=\"js/dalliance-all.custom.js\"></script><script language=\"javascript\" src=\"js/biodalliance-genome-browser.js\"></script><script language=\"javascript\" src=\"js/information-table.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">";
+		//return "<script language=\"javascript\" src=\"js/dalliance-all.custom.js\"></script><script language=\"javascript\" src=\"js/biodalliance-genome-browser.js\"></script><script language=\"javascript\" src=\"js/information-table.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">";
 		
 		// For testing
-		//return "<script src=\"js/dalliance-all.custom.js\"></script><script src=\"js/biodalliance-genome-browser.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">  <script charset=\"utf-8\" src=\"js/DataTables-1.9.4/media/js/jquery.dataTables.js\"></script>";
+		return "<script src=\"js/dalliance-all.custom.js\"></script><script src=\"js/biodalliance-genome-browser.js\"></script><script src=\"js/information-table.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">  <script charset=\"utf-8\" src=\"js/DataTables-1.9.4/media/js/jquery.dataTables.js\"></script><style type=\"text/css\" title=\"currentStyle\">@import \"js/DataTables-1.9.4/media/css/demo_table.css\";</style>";
 		//return "<script language=\"javascript\" src=\"js/dalliance-all.custom.js\"></script><script language=\"javascript\" src=\"js/biodalliance-genome-browser.js\"></script><link rel=\"stylesheet\" href=\"css/bootstrap-scoped.css\" type=\"text/css\"><link rel=\"stylesheet\" href=\"css/dalliance-scoped.css\" type=\"text/css\">";
 	}
 	
