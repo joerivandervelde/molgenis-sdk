@@ -31,14 +31,15 @@ public class ImportGenes
 		String col7a1Genes = "src/main/resources/col7a1-mutations.tsv";
 		
 		String chd7Chromosomes = "src/main/resources/CHD7-chromosomes.tsv";
-		String chd7Genes = "src/main/resources/CHD7-mutations.tsv";
+//		String chd7Genes = "src/main/resources/CHD7-mutations.tsv";
+		String chd7Genes = "src/main/resources/CHD7-mutationsModifiedID.tsv";
 		
 		//importGenes(elegansChromosomes, elegansGenes);
-		importGenes(col7a1Chromosomes, col7a1Genes);
+//		importGenes(col7a1Chromosomes, col7a1Genes);
 //		importGenes(chd7Chromosomes, chd7Genes);
 		
 		// ###
-//		String patientsFile = "/Users/pdopheide/Desktop/CHD7-patients.txt";
+//		String patientsFile = "src/main/resources/CHD7-patients.tsv";
 		String patientsFile = "src/main/resources/col7a1-patients-PUBLIC-DEMODATA.tsv";
 		importPatients(patientsFile);
 	}

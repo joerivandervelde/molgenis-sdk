@@ -9,9 +9,9 @@
 		</p>
 	</div>
 	
-	<div id="svgHolder"></div>
+	<div id="svgHolder" style="width:1510px"></div>
 	
-	<div id="tableHolder">
+	<div id="tableHolder" style="width:1510px">
 		<!--<table id="patientData" border="1">
 		</table>-->
 	</div>

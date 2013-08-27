@@ -8,41 +8,27 @@
 //
 
 function informationTable(features){
-		$('#tableHolder').html( '<table cellpadding="0" cellspacing="0" border="0" class="display" id="patientData"></table>' );
-		
-//	    var oTable = $('#example').dataTable( {
-//        "bProcessing": true,
-//        "sAjaxSource": features.mut,
-//        "aoColumns": [
-//            { "mData": "PatientID" },
-//            { "mData": "cDNAchange1" },
-//            { "mData": "Consequence1" },
-//            { "mData": "ExonIntron1" },
-//            { "mData": "Pheno" },
-//            { "mData": "PubMedID" },
-//            { "mData": "Reference" }
-//        ]
-//    } );
-		
-		$('#patientData').dataTable( {
-			"aaData": features.mut,
-			"aoColumns": [
-            { "mData": "PatientID" },
-            { "mData": "cDNAchange1" },
-            { "mData": "ProteinChange1" },
-            { "mData": "Consequence1" },
-            { "mData": "ExonIntron1" },
-            { "mData": "cDNAchange2" },
-            { "mData": "ProteinChange2" },
-            { "mData": "Consequence2" },
-            { "mData": "ExonIntron2" },
-            { "mData": "Pheno" },
-            { "mData": "PubMedID" },
-            { "mData": "Reference" }
-        ]
-    	});
+	$('#tableHolder').html( '<table cellpadding="0" cellspacing="0" border="0" class="display" id="patientData"><thead><tr><th>ID</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>Phenotype</th><th>PubMed ID</th><th>Reference</th></tr></thead></table>' );
+	
+	$('#patientData').dataTable( {
+		"aaData": features.mut,
+		"aoColumns": [
+           { "mData": "PatientID" },
+           { "mData": "cDNAchange1" },
+           { "mData": "ProteinChange1" },
+           { "mData": "Consequence1" },
+           { "mData": "ExonIntron1" },
+           { "mData": "cDNAchange2" },
+           { "mData": "ProteinChange2" },
+           { "mData": "Consequence2" },
+           { "mData": "ExonIntron2" },
+           { "mData": "Pheno" },
+           { "mData": "PubMedID" },
+           { "mData": "Reference" }
+       ]
+    });
     
-    $('#patientData tbody td').live("click", function(){
+    $('#patientData tbody td').die('click').live('click', function(){
 		var cell = $(this).html(); // get value from clicked cell
 		var pattern = /P\d+/g; // check if patient id
 		var pattern2 = /Patient P\d+/g; // check track name
@@ -53,91 +39,9 @@ function informationTable(features){
 	                       uri: 'http://localhost:8080/das/patient&pid=' + cell,
 	                       desc: 'experiment',
 	                       stylesheet_uri: 'http://localhost:8080/css/patient-track.xml'}];
-	        
-	        // loop through tiers
-        	for(var i = b.tiers.length - 1; i >= 0; --i) {
-        		// if tier is 'Patient P\d+'
-        		if(pattern2.test(b.tiers[i].dasSource.name)){
-        			// remove tier
-        			b.removeTier({index: i});
-        		}
-        	}
         	
         	// add new patient tier
 	        b.addTier(source[0]); // b comes from biodalliance-genome-browser.js
-	        
 	    }
     });
-}
-
-function informationTable1(features){
-	var results_div = document.getElementById('patientData');
-
-	// create table
-	var $table = $('<table>');
-	// caption
-	//$table.append('<caption>MyTable</caption>')
-	// thead
-	$table.append('<thead>').children('thead')
-	.append('<tr />').children('tr').append('<th>ID</th><th>cDNA change</th><th>Protein change</th><th>Exon/Intron</th><th>Consequence</th><th>Phenotype</th><th>PubMed ID</th><th>Reference</th>');
-	
-	//tbody
-	var $tbody = $table.append('<tbody />').children('tbody');
-	
-	for(m in features.mut){
-		// add row
-		var row = '<tr>';
-			row += '<td id="pid" rowspan="2">' + features.mut[m].PatientID + '</td>';
-			row += '<td>' + features.mut[m].cDNAchange1 + '</td>';
-			row += '<td>' + features.mut[m].ProteinChange1 + '</td>';
-			row += '<td>' + features.mut[m].ExonIntron1 + '</td>';
-			row += '<td>' + features.mut[m].Consequence1 + '</td>';
-			row += '<td rowspan="2">' + features.mut[m].Pheno + '</td>';
-			
-			if(features.mut[m].Reference != ""){
-				row += '<td rowspan="2">' + features.mut[m].PubMedID + '</td>';
-				row += '<td rowspan="2"><a href="' + features.mut[m].Reference + '">' + features.mut[m].Reference + '</a></td>';
-			}else{
-				row += '<td rowspan="2">Unpublished</td>';
-				row += '<td rowspan="2">Unpublished</td>';
-			}
-			
-		row +='</tr>';
-		
-		$tbody.append(row).find('tr').last().children('td:eq(0)').click(function(){
-			var cell = $(this).html(); // get value from clicked cell
-			var pattern2 = /Patient P\d+/g; // check track name
-			var source = [{name: 'Patient ' + cell,
-	                       uri: 'http://localhost:8080/das/patient&pid=' + cell,
-	                       desc: 'experiment',
-	                       stylesheet_uri: 'http://localhost:8080/css/patient-track.xml'}];
-	        
-	        // loop through tiers
-        	for(var i = b.tiers.length - 1; i >= 0; --i) {
-        		// if tier is 'Patient P\d+'
-        		//alert(b.tiers[i].label);
-        		if(pattern2.test(b.tiers[i].dasSource.name)){ // see if track label matches patient track
-        			// remove tier
-        			b.removeTier({index: i});
-        		}
-        	}
-        	
-        	// add new patient tier
-	        b.addTier(source[0]); // b is divined in biodalliance-genome-browser.js
-			
-		});
-		
-		var subRow ='<tr>';
-			subRow += '<td>' + features.mut[m].cDNAchange2 + '</td>';
-			subRow += '<td>' + features.mut[m].ProteinChange2 + '</td>';
-			subRow += '<td>' + features.mut[m].ExonIntron2 + '</td>';
-			subRow += '<td>' + features.mut[m].Consequence2 + '</td>';
-		subRow +='</tr>';
-		
-		$tbody.append(subRow);
-	}
-	
-	// add table to dom
-	$('#tableHolder').empty(); // first clear the div, else table gets appended to already visible table(s)
-	$table.appendTo('#tableHolder');
 }

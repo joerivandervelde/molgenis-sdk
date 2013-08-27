@@ -465,7 +465,6 @@ function BigWig() {
 }
 
 BigWig.prototype.readChromTree = function(callback) {
-    console.log('readChromTree: udo=' + this.unzoomedDataOffset + '; cto=' + this.chromTreeOffset);
     var thisB = this;
     this.chromsToIDs = {};
     this.idsToChroms = {};
@@ -750,7 +749,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                 }
                             } else if (blockType == BIG_WIG_TYPE_GRAPH) {
                                 for (var i = 0; i < itemCount; ++i) {
-                                    var start = la[(i*3) + 6] + 1;
+                                    var start = la[(i*3) + 6];
                                     var end   = la[(i*3) + 7];
                                     var score = fa[(i*3) + 8];
                                     if (start > end) {
@@ -1619,8 +1618,10 @@ function Browser(opts) {
         opts = {};
     }
 
+    // custom code
     //this.uiPrefix = 'http://www.biodalliance.org/canvas/';
     this.uiPrefix = 'http://localhost:8080/';
+    // custom code
 
     this.sources = [];
     this.tiers = [];
@@ -1673,6 +1674,7 @@ function Browser(opts) {
     // Options.
     
     this.reverseScrolling = false;
+    this.rulerLocation = 'center';
 
     // Visual config.
 
@@ -1715,9 +1717,11 @@ Browser.prototype.realInit = function() {
 
     var helpPopup;
     var thisB = this;
-    this.browserHolder = document.getElementById(this.pageName);
-    removeChildren(this.browserHolder);
-    this.svgHolder = makeElement('div', null, {tabIndex: 100}, {overflow: 'hidden', display: 'inline-block', width: '100%', fontSize: '10pt', outline: 'none'});
+    this.browserHolderHolder = document.getElementById(this.pageName);
+    this.browserHolder = makeElement('div', null, {tabIndex: -1}, {outline: 'none'});
+    removeChildren(this.browserHolderHolder);
+    this.browserHolderHolder.appendChild(this.browserHolder);
+    this.svgHolder = makeElement('div', null, {}, {overflow: 'hidden', display: 'inline-block', width: '100%', fontSize: '10pt', outline: 'none'});
 
     this.initUI(this.browserHolder, this.svgHolder);
 
@@ -1740,7 +1744,7 @@ Browser.prototype.realInit = function() {
         thisB.resizeViewer();
     }, false);
 
-    this.ruler = makeElement('div', null, null, {width: '1px', height: '2000px', backgroundColor: 'blue', position: 'absolute', zIndex: '900', left: '' + ((this.featurePanelWidth/2)|0) + 'px', top: '0px'});
+    this.ruler = makeElement('div', null, null, {width: '1px', height: '2000px', backgroundColor: 'blue', position: 'absolute', zIndex: '900', top: '0px'});
     this.tierHolder.appendChild(this.ruler);
 
     // Dimension stuff
@@ -1906,14 +1910,21 @@ Browser.prototype.realInit = function() {
             if (ev.shiftKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
                 var ch = tt.forceHeight || tt.subtiers[0].height;
-                if (ch >= 20) {
+                if (ch >= 40) {
                     tt.forceHeight = ch - 10;
                     tt.draw();
                 }
             } else if (ev.ctrlKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
-                if (tt.dasSource.quantLeapThreshold) {
-                    tt.dasSource.quantLeapThreshold += 0.5;
+  
+                if (tt.quantLeapThreshold) {
+                    var th = tt.subtiers[0].height;
+                    var tq = tt.subtiers[0].quant;
+                    if (!tq)
+                        return;
+
+                    var qscale = (tq.max - tq.min) / th;
+                    tt.quantLeapThreshold = tq.min + ((((tt.quantLeapThreshold - tq.min)/qscale)|0)+1)*qscale;
                     tt.draw();
                 }                
             } else {
@@ -1933,10 +1944,20 @@ Browser.prototype.realInit = function() {
                 tt.draw();
             } else if (ev.ctrlKey) {
                 var tt = thisB.tiers[thisB.selectedTier];
-                if (tt.dasSource.quantLeapThreshold && tt.dasSource.quantLeapThreshold > 2) {
-                    tt.dasSource.quantLeapThreshold -= 0.5;
-                    tt.draw();
-                }                
+
+                if (tt.quantLeapThreshold) {
+                    var th = tt.subtiers[0].height;
+                    var tq = tt.subtiers[0].quant;
+                    if (!tq)
+                        return;
+
+                    var qscale = (tq.max - tq.min) / th;
+                    var it = ((tt.quantLeapThreshold - tq.min)/qscale)|0;
+                    if (it > 1) {
+                        tt.quantLeapThreshold = tq.min + (it-1)*qscale;
+                        tt.draw();
+                    }
+                }
             } else {
                 if (thisB.selectedTier < thisB.tiers.length -1) {
                     thisB.setSelectedTier(thisB.selectedTier + 1);
@@ -1950,12 +1971,7 @@ Browser.prototype.realInit = function() {
             thisB.zoomStep(10);
         } else if (ev.keyCode == 72 || ev.keyCode == 104) { // h
             ev.stopPropagation(); ev.preventDefault();
-            if (helpPopup && helpPopup.displayed) {
-                b.removeAllPopups();
-            } else {
-                var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
-                helpPopup = b.popit(ev, 'Help', helpFrame, {width: 500});
-            }
+            b.toggleHelpPopup(ev);
         } else if (ev.keyCode == 73 || ev.keyCode == 105) { // i
             ev.stopPropagation(); ev.preventDefault();
             var t = thisB.tiers[thisB.selectedTier];
@@ -2001,28 +2017,14 @@ Browser.prototype.realInit = function() {
         }
     };
     var keyUpHandler = function(ev) {
-
         thisB.snapZoomLockout = false;
-/*
-        if (ev.keyCode == 32) {
-            if (thisB.isSnapZooming) {
-                thisB.isSnapZooming = false;
-                thisB.zoomSlider.setValue(thisB.savedZoom);
-                thisB.zoom(Math.exp((1.0 * thisB.savedZoom / thisB.zoomExpt)));
-                thisB.invalidateLayouts();
-                thisB.refresh();
-            }
-            ev.stopPropagation(); ev.preventDefault();
-        } */
     }
 
-    this.svgHolder.addEventListener('focus', function(ev) {
-        // console.log('holder focussed');
-        thisB.svgHolder.addEventListener('keydown', keyHandler, false);
+    this.browserHolder.addEventListener('focus', function(ev) {
+        thisB.browserHolder.addEventListener('keydown', keyHandler, false);
     }, false);
-    this.svgHolder.addEventListener('blur', function(ev) {
-        // console.log('holder blurred');
-        thisB.svgHolder.removeEventListener('keydown', keyHandler, false);
+    this.browserHolder.addEventListener('blur', function(ev) {
+        thisB.browserHolder.removeEventListener('keydown', keyHandler, false);
     }, false);
 
     // Popup support (does this really belong here? FIXME)
@@ -2046,6 +2048,8 @@ Browser.prototype.realInit = function() {
     thisB.arrangeTiers();
     thisB.refresh();
     thisB.setSelectedTier(1);
+
+    thisB.positionRuler();
 
 
     for (var ti = 0; ti < this.tiers.length; ++ti) {
@@ -2239,7 +2243,7 @@ Browser.prototype.realMakeTier = function(source) {
         
 
     vph.addEventListener('mousedown', function(ev) {
-        thisB.svgHolder.focus();
+        thisB.browserHolder.focus();
         ev.preventDefault();
         var br = vph.getBoundingClientRect();
         var rx = ev.clientX, ry = ev.clientY;
@@ -2266,8 +2270,8 @@ Browser.prototype.realMakeTier = function(source) {
         } else {
             hoverTimeout = setTimeout(function() {
                 var hit = featureLookup(rx, ry);
-                if (hit) {
-                    thisB.notifyFeatureHover(ev, hit); // FIXME group
+                if (hit && hit.length > 0) {
+                    thisB.notifyFeatureHover(ev, hit[hit.length - 1], hit, tier);
                 }
             }, 1000);
         }
@@ -2279,7 +2283,7 @@ Browser.prototype.realMakeTier = function(source) {
         var rx = ev.clientX - br.left, ry = ev.clientY - br.top;
 
         var hit = featureLookup(rx, ry);
-        if (hit && !thisB.isDragging) {
+        if (hit && hit.length > 0 && !thisB.isDragging) {
             if (doubleClickTimeout) {
                 clearTimeout(doubleClickTimeout);
                 doubleClickTimeout = null;
@@ -2287,7 +2291,7 @@ Browser.prototype.realMakeTier = function(source) {
             } else {
                 doubleClickTimeout = setTimeout(function() {
                     doubleClickTimeout = null;
-                    thisB.notifyFeature(ev, hit);
+                    thisB.notifyFeature(ev, hit[hit.length-1], hit, tier);
                 }, 500);
             }
         }
@@ -2335,6 +2339,7 @@ Browser.prototype.realMakeTier = function(source) {
         ev.stopPropagation(); ev.preventDefault();
         for (var ti = 0; ti < thisB.tiers.length; ++ti) {
             if (thisB.tiers[ti] === tier) {
+                thisB.browserHolder.focus();
                 if (ti != thisB.selectedTier) {
                     thisB.setSelectedTier(ti);
                     return;
@@ -2712,13 +2717,7 @@ Browser.prototype.resizeViewer = function(skipRefresh) {
             this.viewEnd = this.viewStart + wid - 1;
         }
 
-        this.ruler.style.left = '' + ((this.featurePanelWidth/2)|0) + 'px';
-        for (var ti = 0; ti < this.tiers.length; ++ti) {
-            var q = this.tiers[ti].quantOverlay;
-            if (q) {
-                q.style.left = '' + ((this.featurePanelWidth/2)|0) + 'px';
-            }
-        }
+        this.positionRuler();
 
         if (!skipRefresh) {
             this.spaceCheck();
@@ -2869,10 +2868,10 @@ Browser.prototype.addFeatureListener = function(handler, opts) {
     this.featureListeners.push(handler);
 }
 
-Browser.prototype.notifyFeature = function(ev, feature, group) {
+Browser.prototype.notifyFeature = function(ev, feature, hit, tier) {
   for (var fli = 0; fli < this.featureListeners.length; ++fli) {
       try {
-          this.featureListeners[fli](ev, feature, group);
+          this.featureListeners[fli](ev, feature, hit, tier);
       } catch (ex) {
           console.log(ex.stack);
       }
@@ -2884,10 +2883,10 @@ Browser.prototype.addFeatureHoverListener = function(handler, opts) {
     this.featureHoverListeners.push(handler);
 }
 
-Browser.prototype.notifyFeatureHover = function(ev, feature, group) {
+Browser.prototype.notifyFeatureHover = function(ev, feature, hit, tier) {
     for (var fli = 0; fli < this.featureHoverListeners.length; ++fli) {
         try {
-            this.featureHoverListeners[fli](ev, feature, group);
+            this.featureHoverListeners[fli](ev, feature, hit, tier);
         } catch (ex) {
             console.log(ex.stack);
         }
@@ -2984,7 +2983,7 @@ Browser.prototype.setSelectedTier = function(t) {
         }
     }
     if (t != null) {
-        this.svgHolder.focus();
+        this.browserHolder.focus();
     }
 }
 
@@ -3002,7 +3001,44 @@ Browser.prototype.notifyTierSelectionWrap = function(i) {
     }
 }
 
-Browser.prototype.featureDoubleClick = function(f, rx, ry) {
+Browser.prototype.positionRuler = function() {
+    var display = 'none';
+    var left = '';
+    var right = '';
+
+    if (this.rulerLocation == 'center') {
+        display = 'block';
+        left = '' + ((this.featurePanelWidth/2)|0) + 'px';
+    } else if (this.rulerLocation == 'left') {
+        display = 'block';
+        left = '0px';
+    } else if (this.rulerLocation == 'right') {
+        display = 'block';
+        right = '0px'
+    } else {
+        display = 'none';
+    }
+
+    this.ruler.style.display = display;
+    this.ruler.style.left = left;
+    this.ruler.style.right = right;
+
+    for (var ti = 0; ti < this.tiers.length; ++ti) {
+        var q = this.tiers[ti].quantOverlay;
+        if (q) {
+            q.style.display = display;
+            q.style.left = left;
+            q.style.right = right;
+        }
+    }
+}
+
+Browser.prototype.featureDoubleClick = function(hit, rx, ry) {
+    if (!hit || hit.length == 0)
+        return;
+
+    f = hit[hit.length - 1];
+
     if (!f.min || !f.max) {
         return;
     }
@@ -3024,25 +3060,28 @@ Browser.prototype.featureDoubleClick = function(f, rx, ry) {
     this.setLocation(null, newMid - (width/2), newMid + (width/2));
 }
 
+function glyphLookup(glyphs, rx, matches) {
+    matches = matches || [];
 
-
-
-function glyphLookup(glyphs, rx) {
     for (var gi = 0; gi < glyphs.length; ++gi) {
         var g = glyphs[gi];
-        if (g.min() <= rx && g.max() >= rx) {
+        if (!g.notSelectable && g.min() <= rx && g.max() >= rx) {
             if (g.feature) {
-                return g.feature;
-            } else if (g.glyphs) {
-                return glyphLookup(g.glyphs, rx) || g.group;
+                matches.push(g.feature);
+            } else if (g.group) {
+                matches.push(g.group);
+            }
+    
+            if (g.glyphs) {
+                return glyphLookup(g.glyphs, rx, matches);
             } else if (g.glyph) {
-                return glyphLookup([g.glyph], rx) || g.group;
+                return glyphLookup([g.glyph], rx, matches);
             } else {
-                return g.group;
+                return matches;
             }
         }
     }
-    return null;
+    return matches;
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -3062,14 +3101,16 @@ Browser.prototype.addFeatureInfoPlugin = function(handler) {
     this.featureInfoPlugins.push(handler);
 }
 
-function FeatureInfo(feature, group) {
+function FeatureInfo(hit, feature, group) {
     var name = pick(group.type, feature.type);
     var fid = pick(group.label, feature.label, group.id, feature.id);
     if (fid && fid.indexOf('__dazzle') != 0) {
         name = name + ': ' + fid;
     }
 
+    this.hit = hit;
     this.feature = feature;
+    this.group = group;
     this.title = name;
     this.sections = [];
 }
@@ -3085,11 +3126,21 @@ FeatureInfo.prototype.add = function(label, info) {
     this.sections.push({label: label, info: info});
 }
 
-Browser.prototype.featurePopup = function(ev, feature, group) {
-    if (!feature) feature = {};
-    if (!group) group = {};
-    var featureInfo = new FeatureInfo(feature, group);
+Browser.prototype.featurePopup = function(ev, __ignored_feature, hit, tier) {
+    var hi = hit.length;
+    var feature = --hi >= 0 ? hit[hi] : {};
+    var group = --hi >= 0 ? hit[hi] : {};
+
+    var featureInfo = new FeatureInfo(hit, feature, group);
     var fips = this.featureInfoPlugins || [];
+    for (fipi = 0; fipi < fips.length; ++fipi) {
+        try {
+            fips[fipi](feature, featureInfo);
+        } catch (e) {
+            console.log(e.stack || e);
+        }
+    }
+    fips = tier.featureInfoPlugins || [];
     for (fipi = 0; fipi < fips.length; ++fipi) {
         try {
             fips[fipi](feature, featureInfo);
@@ -4283,13 +4334,20 @@ Browser.prototype.makeTooltip = function(ele, text)
 Browser.prototype.popit = function(ev, name, ele, opts)
 {
     var thisB = this;
-    if (!opts) {
+    if (!opts) 
         opts = {};
-    }
+    if (!ev) 
+        ev = {};
 
     var width = opts.width || 200;
 
-    var mx =  ev.clientX, my = ev.clientY;
+    var mx, my;
+
+    if (ev.clientX) {
+        var mx =  ev.clientX, my = ev.clientY;
+    } else {
+        mx = 500; my= 50;
+    }
     mx +=  document.documentElement.scrollLeft || document.body.scrollLeft;
     my +=  document.documentElement.scrollTop || document.body.scrollTop;
     var winWidth = window.innerWidth;
@@ -4298,7 +4356,7 @@ Browser.prototype.popit = function(ev, name, ele, opts)
     var left = Math.min(mx - (width/2), (winWidth - width - 30));
 
     var popup = makeElement('div');
-    popup.className = 'popover fade bottom in';
+    popup.className = 'popover fade ' + (ev.clientX ? 'bottom ' : '') + 'in';
     popup.style.display = 'block';
     popup.style.position = 'absolute';
     popup.style.top = '' + top + 'px';
@@ -4653,7 +4711,7 @@ DasTier.prototype.paint = function() {
 	lh = lh + subtiers[s].height + MIN_PADDING;
     }
     lh += 6
-    this.viewport.setAttribute('height', Math.max(lh, 50));
+    this.viewport.setAttribute('height', lh);
     this.viewport.style.left = '-1000px';
     this.holder.style.height = '' + Math.max(lh, 35) + 'px';
     this.updateHeight();
@@ -4686,8 +4744,8 @@ DasTier.prototype.paint = function() {
     }
     gc.restore();
 
-    if (quant && this.dasSource.quantLeapThreshold) {
-	var ry = 3 + subtiers[0].height * (1.0 - ((this.dasSource.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
+    if (quant && this.quantLeapThreshold && this.featureSource && this.featureSource.quantFindNextFeature) {
+	var ry = 3 + subtiers[0].height * (1.0 - ((this.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
 
 	gc.save();
 	gc.strokeStyle = 'red';
@@ -4698,31 +4756,60 @@ DasTier.prototype.paint = function() {
 	gc.restore();
     }
 
-    if (quant && this.quantOverlay) {
-	this.quantOverlay.style.display = 'block';
+    this.paintQuant();
+}
 
+DasTier.prototype.paintQuant = function() {
+    var quant;
+    if (this.subtiers && this.subtiers.length > 0)
+	quant = this.subtiers[0].quant;
+
+    if (quant && this.quantOverlay) {
 	var h = this.viewport.height;
+	var w = this.quantOverlay.width;
 	this.quantOverlay.height = this.viewport.height;
 	var ctx = this.quantOverlay.getContext('2d');
 
         ctx.fillStyle = 'white'
         ctx.globalAlpha = 0.6;
-        ctx.fillRect(0, 0, 30, 20);
-        ctx.fillRect(0, h-20, 30, 20);
+
+	if (this.browser.rulerLocation == 'right') {
+	    ctx.fillRect(w-30, 0, 30, 20);
+            ctx.fillRect(w-30, h-20, 30, 20);
+	} else {
+            ctx.fillRect(0, 0, 30, 20);
+            ctx.fillRect(0, h-20, 30, 20);
+	}
         ctx.globalAlpha = 1.0;
 
         ctx.strokeStyle = 'black';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(8, 3);
-        ctx.lineTo(0,3);
-        ctx.lineTo(0,h-3);
-        ctx.lineTo(8,h-3);
+
+	if (this.browser.rulerLocation == 'right') {
+	    ctx.moveTo(w - 8, 3);
+            ctx.lineTo(w, 3);
+            ctx.lineTo(w, h-3);
+            ctx.lineTo(w - 8, h - 3);
+	} else {
+            ctx.moveTo(8, 3);
+            ctx.lineTo(0,3);
+            ctx.lineTo(0,h-3);
+            ctx.lineTo(8,h-3);
+	}
         ctx.stroke();
 
         ctx.fillStyle = 'black';
-        ctx.fillText(formatQuantLabel(quant.max), 8, 8);
-        ctx.fillText(formatQuantLabel(quant.min), 8, h-5);
+
+	if (this.browser.rulerLocation == 'right') {
+	    ctx.textAlign = 'right';
+	    ctx.fillText(formatQuantLabel(quant.max), w-8, 10);
+            ctx.fillText(formatQuantLabel(quant.min), w-8, h-5);
+	} else {
+	    ctx.textAlign = 'left';
+            ctx.fillText(formatQuantLabel(quant.max), 8, 10);
+            ctx.fillText(formatQuantLabel(quant.min), 8, h-5);
+	}
     }
 }
 
@@ -4937,7 +5024,7 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 	var sc = ((score - (1.0*smin)) * yscale)|0;
 	quant = {min: smin, max: smax};
 
-	var fill = feature.override_color || style.BGCOLOR || style.COLOR1 || 'black';
+	var fill = feature.override_color || style.FGCOLOR || style.COLOR1 || 'black';
 	if (style.COLOR2) {
 	    var grad = style._gradient;
 	    if (!grad) {
@@ -5013,7 +5100,7 @@ DasTier.prototype.styleForFeature = function(f) {
         }
 
 	var labelRE = sh._labelRE;
-	if (!labelRE) {
+	if (!labelRE || !labelRE.test) {
 	    labelRE = new RegExp('^' + sh.label + '$');
 	    sh._labelRE = labelRE;
 	}
@@ -5021,7 +5108,7 @@ DasTier.prototype.styleForFeature = function(f) {
             continue;
         }
 	var methodRE = sh._methodRE;
-	if (!methodRE) {
+	if (!methodRE || !methodRE.test) {
 	    methodRE = new RegExp('^' + sh.method + '$');
 	    sh._methodRE = methodRE;
 	}
@@ -5409,14 +5496,16 @@ Browser.prototype.addFeatureInfoPlugin = function(handler) {
     this.featureInfoPlugins.push(handler);
 }
 
-function FeatureInfo(feature, group) {
+function FeatureInfo(hit, feature, group) {
     var name = pick(group.type, feature.type);
     var fid = pick(group.label, feature.label, group.id, feature.id);
     if (fid && fid.indexOf('__dazzle') != 0) {
         name = name + ': ' + fid;
     }
 
+    this.hit = hit;
     this.feature = feature;
+    this.group = group;
     this.title = name;
     this.sections = [];
 }
@@ -5432,11 +5521,21 @@ FeatureInfo.prototype.add = function(label, info) {
     this.sections.push({label: label, info: info});
 }
 
-Browser.prototype.featurePopup = function(ev, feature, group) {
-    if (!feature) feature = {};
-    if (!group) group = {};
-    var featureInfo = new FeatureInfo(feature, group);
+Browser.prototype.featurePopup = function(ev, __ignored_feature, hit, tier) {
+    var hi = hit.length;
+    var feature = --hi >= 0 ? hit[hi] : {};
+    var group = --hi >= 0 ? hit[hi] : {};
+
+    var featureInfo = new FeatureInfo(hit, feature, group);
     var fips = this.featureInfoPlugins || [];
+    for (fipi = 0; fipi < fips.length; ++fipi) {
+        try {
+            fips[fipi](feature, featureInfo);
+        } catch (e) {
+            console.log(e.stack || e);
+        }
+    }
+    fips = tier.featureInfoPlugins || [];
     for (fipi = 0; fipi < fips.length; ++fipi) {
         try {
             fips[fipi](feature, featureInfo);
@@ -5948,7 +6047,7 @@ KnownSpace.prototype.provision = function(tier, chr, min, max, actualScale, want
         
         // console.log('features=' + features.length + '; maybe=' + mayDownsample + '; actualScale=' + actualScale + '; thisScale=' + this.scale + '; wanted=' + wantedTypes);	
 
-        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts.forceReduction)) ||
+        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts || !src.opts.forceReduction)) ||
             (mayDownsample && wantedTypes && wantedTypes.length == 1 && wantedTypes.indexOf('density') >= 0))
         {
             features = downsample(features, this.scale);
@@ -6804,14 +6903,19 @@ Browser.prototype.saveSVG = function() {
 
     var margin = 200;
 
-    var dallianceAnchor = makeElementNS(NS_SVG, 'text', 'Graphics from Dalliance ' + VERSION, {
-        x: (b.featurePanelWidth + margin + 20)/2,
-        y: 30,
-        strokeWidth: 0,
-        fill: 'black',
-        fontSize: '12pt',
-	textAnchor: 'middle'
-    });
+    var dallianceAnchor = makeElementNS(NS_SVG, 'a',
+       makeElementNS(NS_SVG, 'text', 'Graphics from Dalliance ' + VERSION, {
+           x: (b.featurePanelWidth + margin + 20)/2,
+           y: 30,
+           strokeWidth: 0,
+           fill: 'black',
+           fontSize: '12pt',
+	   textAnchor: 'middle',
+	   fill: 'blue'
+       }));
+    dallianceAnchor.setAttribute('xmlns:xlink', NS_XLINK);
+    dallianceAnchor.setAttribute('xlink:href', 'http://www.biodalliance.org/');
+  
     saveRoot.appendChild(dallianceAnchor);
     
     var clipRect = makeElementNS(NS_SVG, 'rect', null, {
@@ -6824,13 +6928,17 @@ Browser.prototype.saveSVG = function() {
     saveRoot.appendChild(clip);
 
     var pos = 70;
-    var tierHolder = makeElementNS(NS_SVG, 'g', null, {clipPath: 'url(#featureClip)', clipRule: 'nonzero'});
+    var tierHolder = makeElementNS(NS_SVG, 'g', null, {/* clipPath: 'url(#featureClip)', clipRule: 'nonzero' */});
 
 
     for (var ti = 0; ti < b.tiers.length; ++ti) {
         var tier = b.tiers[ti];
-	var tierSVG = makeElementNS(NS_SVG, 'g');
+	var tierSVG = makeElementNS(NS_SVG, 'g', null, {clipPath: 'url(#featureClip)', clipRule: 'nonzero'});
+	var tierLabels = makeElementNS(NS_SVG, 'g');
 	var tierTopPos = pos;
+
+	var tierBackground = makeElementNS(NS_SVG, 'rect', null, {x: 0, y: tierTopPos, width: '10000', height: 50, fill: tier.background});
+	tierSVG.appendChild(tierBackground);
 
 	if (tier.dasSource.tier_type === 'sequence') {
 	    var seqTrack = svgSeqTier(tier, tier.currentSequence);
@@ -6851,20 +6959,36 @@ Browser.prototype.saveSVG = function() {
                     var glyph = subtier.glyphs[gi];
                     glyphElements.push(glyph.toSVG());
 		}
+
 		tierSVG.appendChild(makeElementNS(NS_SVG, 'g', glyphElements, {transform: 'translate(' + (margin+offset) + ', ' + pos + ')'}));
+
+		if (subtier.quant) {
+		    var q = subtier.quant;
+		    var path = new SVGPath();
+		    path.moveTo(margin + 5, pos);
+		    path.lineTo(margin, pos);
+		    path.lineTo(margin, pos + subtier.height);
+		    path.lineTo(margin + 5, pos + subtier.height);
+		    console.log(path.toPathData());
+		    tierLabels.appendChild(makeElementNS(NS_SVG, 'path', null, {d: path.toPathData(), fill: 'none', stroke: 'black', strokeWidth: '2px'}));
+		    tierLabels.appendChild(makeElementNS(NS_SVG, 'text', formatQuantLabel(q.max), {x: margin - 3, y: pos + 8, textAnchor: 'end'}));
+		    tierLabels.appendChild(makeElementNS(NS_SVG, 'text', formatQuantLabel(q.min), {x: margin - 3, y: pos +  subtier.height - 3, textAnchor: 'end'}));
+		}
+
 		pos += subtier.height + 3;
             }
 	    pos += 10;
 	}
 
-	saveRoot.appendChild(
+	tierLabels.appendChild(
 	    makeElementNS(
 		NS_SVG, 'text',
 		tier.dasSource.name,
-		{x: margin - 10, y: (pos+tierTopPos+12)/2, fontSize: '12pt', textAnchor: 'end'}));
+		{x: margin - 12, y: (pos+tierTopPos+5)/2, fontSize: '12pt', textAnchor: 'end'}));
 
-	tierHolder.appendChild(makeElementNS(NS_SVG, 'rect', null, {x: 0, y: tierTopPos, width: '10000', height: pos-tierTopPos, fill: tier.background}));
-	tierHolder.appendChild(tierSVG);
+	
+	tierBackground.setAttribute('height', pos - tierTopPos);
+	tierHolder.appendChild(makeElementNS(NS_SVG, 'g', [tierSVG, tierLabels]));
     }
     saveRoot.appendChild(tierHolder);
 
@@ -7072,17 +7196,30 @@ function DasTier(browser, source, viewport, holder, overlay, placard, placardCon
     this.req = null;
     this.layoutHeight = 25;
     this.bumped = true; 
+    if (source.quantLeapThreshold) {
+        this.quantLeapThreshold = source.quantLeapThreshold;
+    }
     if (this.dasSource.collapseSuperGroups) {
         this.bumped = false;
     }
     this.y = 0;
     this.layoutWasDone = false;
 
+    if (source.featureInfoPlugin) {
+        this.addFeatureInfoPlugin(source.featureInfoPlugin);
+    }
+
     this.initSources();
 }
 
 DasTier.prototype.toString = function() {
     return this.id;
+}
+
+DasTier.prototype.addFeatureInfoPlugin = function(p) {
+    if (!this.featureInfoPlugins) 
+        this.featureInfoPlugins = [];
+    this.featureInfoPlugins.push(p);
 }
 
 DasTier.prototype.init = function() {
@@ -7230,17 +7367,11 @@ function zoomForScale(scale) {
 }
 
 
-DasTier.prototype.sourceFindNextFeature = function(chr, pos, dir, callback) {
-    callback(null);
-}
-
-DasTier.prototype.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
-    callback(null);
-}
-
 DasTier.prototype.findNextFeature = function(chr, pos, dir, fedge, callback) {
-    if (this.dasSource.quantLeapThreshold) {
-        this.quantFindNextFeature(chr, pos, dir, this.dasSource.quantLeapThreshold, callback);
+    if (this.quantLeapThreshold) {
+        var width = this.browser.viewEnd - this.browser.viewStart + 1;
+        pos = (pos +  ((width * dir) / 2))|0
+        this.featureSource.quantFindNextFeature(chr, pos, dir, this.quantLeapThreshold, callback);
     } else {
         if (this.knownStart && pos >= this.knownStart && pos <= this.knownEnd) {
             if (this.currentFeatures) {
@@ -7293,7 +7424,7 @@ DasTier.prototype.findNextFeature = function(chr, pos, dir, fedge, callback) {
             }
         }
 
-        this.sourceFindNextFeature(chr, pos, dir, callback);
+        this.featureSource.findNextFeature(chr, pos, dir, callback);
     }
 }
 
@@ -8398,7 +8529,7 @@ function removeChildren(node)
 // WARNING: not for general use!
 //
 
-function miniJSONify(o) {
+function miniJSONify(o, exc) {
     if (typeof o === 'undefined') {
         return 'undefined';
     } else if (o == null) {
@@ -8413,14 +8544,17 @@ function miniJSONify(o) {
         if (o instanceof Array) {
             var s = null;
             for (var i = 0; i < o.length; ++i) {
-                s = (s == null ? '' : (s + ', ')) + miniJSONify(o[i]);
+                s = (s == null ? '' : (s + ', ')) + miniJSONify(o[i], exc);
             }
             return '[' + (s?s:'') + ']';
         } else {
+            exc = exc || {};
             var s = null;
             for (var k in o) {
+                if (exc[k])
+                    continue;
                 if (k != undefined && typeof(o[k]) != 'function') {
-                    s = (s == null ? '' : (s + ', ')) + k + ': ' + miniJSONify(o[k]);
+                    s = (s == null ? '' : (s + ', ')) + k + ': ' + miniJSONify(o[k], exc);
                 }
             }
             return '{' + (s?s:'') + '}';
@@ -8569,8 +8703,8 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     // var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):([0-9,]+)([\-,\,.]+([0-9,]+))?/;
 
     if (!b.disableDefaultFeaturePopup) {
-        this.addFeatureListener(function(ev, hit) {
-            b.featurePopup(ev, hit, null);
+        this.addFeatureListener(function(ev, feature, hit, tier) {
+            b.featurePopup(ev, feature, hit, tier);
             
             // custom code
 			if(hit.typeId == "mutation"){ // could also use hit.type?
@@ -8581,13 +8715,12 @@ Browser.prototype.initUI = function(holder, genomePanel) {
 					type: "GET",
 					dataType: "json",
 					success: function(data) {
-					console.log("Data returned : " + data);
-					
-					if (typeof data == 'object') {
-						informationTable(data);
-					}
-				
-				},
+						console.log("Data returned : " + data);
+						
+						if (typeof data == 'object') {
+							informationTable(data);
+						}
+					},
 					error: function(jqXHR, textStatus, errorThrown) {
 						console.log("jqXHR : "+jqXHR + " text status : " + textStatus + " error : " + errorThrown);
 					}
@@ -8626,9 +8759,9 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     var favBtn = makeElement('a', [makeElement('i', null, {className: 'icon-bookmark'})], {className: 'btn'});
     var svgBtn = makeElement('a', [makeElement('i', null, {className: 'icon-print'})], {className: 'btn'});
     var resetBtn = makeElement('a', [makeElement('i', null, {className: 'icon-refresh'})], {className: 'btn'});
-    var optsButton = makeElement('a', [makeElement('i', null, {className: 'icon-cog'})], {className: 'btn'});
+    var optsButton = makeElement('div', [makeElement('i', null, {className: 'icon-cog'})], {className: 'btn'});
 
-    var helpButton = makeElement('a', [makeElement('i', null, {className: 'icon-info-sign'})], {className: 'btn'});
+    var helpButton = makeElement('div', [makeElement('i', null, {className: 'icon-info-sign'})], {className: 'btn'});
     
     toolbar.appendChild(makeElement('div', [addTrackBtn,
                                             // favBtn,
@@ -8820,31 +8953,13 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     optsButton.addEventListener('click', function(ev) {
         ev.stopPropagation(); ev.preventDefault();
 
-        if (optsPopup && optsPopup.displayed) {
-            b.removeAllPopups();
-        } else {
-            var optsForm = makeElement('form', null, {className: 'popover-content'});
-            var scrollModeButton = makeElement('input', '', {type: 'checkbox', checked: b.reverseScrolling});
-            scrollModeButton.addEventListener('change', function(ev) {
-                b.reverseScrolling = scrollModeButton.checked;
-            }, false);
-            optsForm.appendChild(makeElement('label', [scrollModeButton, 'Reverse trackpad scrolling'], {className: 'checkbox'}));
-            b.removeAllPopups();
-            optsPopup = b.popit(ev, 'Options', optsForm, {width: 300});
-        }
+        b.toggleOptsPopup(ev);
     }, false);
     b.makeTooltip(optsButton, 'Configure options.');
 
-    var helpPopup;
     helpButton.addEventListener('click', function(ev) {
         ev.stopPropagation(); ev.preventDefault();
-
-        if (helpPopup && helpPopup.displayed) {
-            b.removeAllPopups();
-        } else {
-            var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
-            helpPopup = b.popit(ev, 'Help', helpFrame, {width: 500});
-        }
+        b.toggleHelpPopup(ev);
     });
     b.makeTooltip(helpButton, 'Help; Keyboard shortcuts.');
 
@@ -8856,6 +8971,54 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     });
 
   }
+
+Browser.prototype.toggleHelpPopup = function(ev) {
+    if (this.helpPopup && this.helpPopup.displayed) {
+        this.removeAllPopups();
+    } else {
+    	// custom code
+        //var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
+        var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'css/index.html'}, {width: '490px', height: '500px'});
+        // custom code
+        this.helpPopup = this.popit(ev, 'Help', helpFrame, {width: 500});
+    }
+}
+
+Browser.prototype.toggleOptsPopup = function(ev) {
+    var b = this;
+
+    if (this.optsPopup && this.optsPopup.displayed) {
+        this.removeAllPopups();
+    } else {
+        var optsForm = makeElement('form', null, {className: 'popover-content form-horizontal'});
+
+        var scrollModeButton = makeElement('input', '', {type: 'checkbox', checked: b.reverseScrolling});
+        scrollModeButton.addEventListener('change', function(ev) {
+            b.reverseScrolling = scrollModeButton.checked;
+        }, false);
+        optsForm.appendChild(makeElement('div', [makeElement('label', 'Reverse trackpad scrolling', {className: 'control-label'}), scrollModeButton], {className: 'control-group'}));
+
+        var rulerSelect = makeElement('select');
+        rulerSelect.appendChild(makeElement('option', 'Left', {value: 'left'}));
+        rulerSelect.appendChild(makeElement('option', 'Center', {value: 'center'}));
+        rulerSelect.appendChild(makeElement('option', 'Right', {value: 'right'}));
+        rulerSelect.appendChild(makeElement('option', 'None', {value: 'none'}));
+        rulerSelect.value = b.rulerLocation;
+        rulerSelect.addEventListener('change', function(ev) {
+            b.rulerLocation = rulerSelect.value;
+            b.positionRuler();
+            for (var ti = 0; ti < b.tiers.length; ++ti) {
+                b.tiers[ti].paintQuant();
+            }
+        }, false);
+        optsForm.appendChild(makeElement('div', [makeElement('label', 'Display ruler', {className: 'control-label'}), rulerSelect], {className: 'control-group'}));
+        
+
+        this.removeAllPopups();
+        this.optsPopup = this.popit(ev, 'Options', optsForm, {width: 500});
+    }
+}
+
 // 
 // Dalliance Genome Explorer
 // (c) Thomas Down 2006-2010
@@ -9955,6 +10118,8 @@ function GridGlyph(height) {
     this._height = height || 50;
 }
 
+GridGlyph.prototype.notSelectable = true;
+
 GridGlyph.prototype.min = function() {
     return -100000;
 };
@@ -9995,7 +10160,8 @@ GridGlyph.prototype.toSVG = function() {
 	 fill: 'none',
 	 stroke: 'black',
 	 strokeWidth: '0.1px'});
-}/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+}
+/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 
 // Dalliance Genome Explorer
@@ -10012,6 +10178,7 @@ Browser.prototype.nukeStatus = function() {
     delete localStorage['dalliance.' + this.cookieKey + '.version'];
 
     delete localStorage['dalliance.' + this.cookieKey + '.reverse-scrolling'];
+    delete localStorage['dalliance.' + this.cookieKey + '.ruler-location'];
 }
 
 Browser.prototype.storeStatus = function() {
@@ -10035,6 +10202,7 @@ Browser.prototype.storeStatus = function() {
     }
     localStorage['dalliance.' + this.cookieKey + '.sources'] = JSON.stringify(currentSourceList);
     localStorage['dalliance.' + this.cookieKey + '.reverse-scrolling'] = this.reverseScrolling;
+    localStorage['dalliance.' + this.cookieKey + '.ruler-location'] = this.rulerLocation;
     
     localStorage['dalliance.' + this.cookieKey + '.version'] = VERSION.CONFIG;
 }
@@ -10060,6 +10228,12 @@ Browser.prototype.restoreStatus = function() {
         return;
     }
 
+    var defaultSourcesByConfigHash = {};
+    for (var si = 0; si < this.sources.length; ++si) {
+        var source = this.sources[si];
+        defaultSourcesByConfigHash[hex_sha1(miniJSONify(source))] = source;
+    }
+
     var qChr = localStorage['dalliance.' + this.cookieKey + '.view-chr'];
     var qMin = localStorage['dalliance.' + this.cookieKey + '.view-start']|0;
     var qMax = localStorage['dalliance.' + this.cookieKey + '.view-end']|0;
@@ -10076,9 +10250,24 @@ Browser.prototype.restoreStatus = function() {
     var rs = localStorage['dalliance.' + this.cookieKey + '.reverse-scrolling'];
     this.reverseScrolling = (rs && rs == 'true');
 
+    var rl = localStorage['dalliance.' + this.cookieKey + '.ruler-location'];
+    if (rl)
+        this.rulerLocation = rl;
+
     var sourceStr = localStorage['dalliance.' + this.cookieKey + '.sources'];
     if (sourceStr) {
 	this.sources = JSON.parse(sourceStr);
+        for (var si = 0; si < this.sources.length; ++si) {
+            var source = this.sources[si];
+            var hash = hex_sha1(miniJSONify(source, {props: true, coords: true}));
+            var oldSource = defaultSourcesByConfigHash[hash];
+            if (oldSource) {
+                if (oldSource.featureInfoPlugin) {
+                    // console.log('revivifying ' + hash);
+                    source.featureInfoPlugin = oldSource.featureInfoPlugin;
+                }
+            }
+        }
     }
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
@@ -10094,73 +10283,50 @@ DasTier.prototype.initSources = function() {
     var thisTier = this;
     var fs = new DummyFeatureSource(), ss;
 
-    if (this.dasSource.bwgURI || this.dasSource.bwgBlob) {
-        fs = new BWGFeatureSource(this.dasSource);
-
-        this.sourceFindNextFeature = function(chr, pos, dir, callback) {
-            fs.bwgHolder.res.getUnzoomedView().getFirstAdjacent(chr, pos, dir, function(res) {
-                    if (res.length > 0 && res[0] != null) {
-                        callback(res[0]);
-                    }
-                });
-        };
-        this.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
-            var beforeQFNF = Date.now()|0;
-            var width = this.browser.viewEnd - this.browser.viewStart + 1;
-            pos = (pos +  ((width * dir) / 2))|0
-            fs.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, function(a, b) {
-                var afterQFNF = Date.now()|0;
-                console.log('QFNF took ' + (afterQFNF - beforeQFNF) + 'ms');
-                return callback(a, b);
-            });
-        };
-    } else if (this.dasSource.bamURI || this.dasSource.bamBlob) {
-        fs = new BAMFeatureSource(this.dasSource);
-    } else if (this.dasSource.bamblrURI) {
-        fs = new BamblrFeatureSource(this.dasSource);
-    } else if (this.dasSource.jbURI) {
-        fs = new JBrowseFeatureSource(this.dasSource);
-    } else if (this.dasSource.tier_type == 'sequence') {
+    if (this.dasSource.tier_type == 'sequence') {
         if (this.dasSource.twoBitURI) {
             ss = new TwoBitSequenceSource(this.dasSource);
         } else {
             ss = new DASSequenceSource(this.dasSource);
         }
-    } else if (this.dasSource.tier_type == 'ensembl') {
-        fs = new EnsemblFeatureSource(this.dasSource);
     } else {
-        fs = new DASFeatureSource(this.dasSource);
-        var dasAdjLock = false;
-        if (this.dasSource.capabilities && arrayIndexOf(this.dasSource.capabilities, 'das1:adjacent-feature') >= 0) {
-            this.sourceFindNextFeature = function(chr, pos, dir, callback) {
-                if (dasAdjLock) {
-                    return dlog('Already looking for a next feature, be patient!');
-                }
-                dasAdjLock = true;
-                var fops = {
-                    adjacent: chr + ':' + (pos|0) + ':' + (dir > 0 ? 'F' : 'B')
-                }
-                var types = thisTier.getDesiredTypes(thisTier.browser.scale);
-                if (types) {
-                    fops.types = types;
-                }
-                thisTier.dasSource.features(null, fops, function(res) {
-                    dasAdjLock = false;
-                    if (res.length > 0 && res[0] != null) {
-                        dlog('DAS adjacent seems to be working...');
-                        callback(res[0]);
-                    }
-                });
-            };
-        }
-    }
-    
-    if (this.dasSource.mapping) {
-        fs = new MappedFeatureSource(fs, this.browser.chains[this.dasSource.mapping]);
+        fs = this.browser.createFeatureSource(this.dasSource);
     }
 
     this.featureSource = fs;
     this.sequenceSource = ss;
+}
+
+Browser.prototype.createFeatureSource = function(config) {
+    var fs;
+
+    if (config.bwgURI || config.bwgBlob) {
+        fs =  new BWGFeatureSource(config);
+    } else if (config.bamURI || config.bamBlob) {
+        fs = new BAMFeatureSource(config);
+    } else if (config.bamblrURI) {
+        fs = new BamblrFeatureSource(config);
+    } else if (config.jbURI) {
+        fs = new JBrowseFeatureSource(config);
+    } else if (config.tier_type == 'ensembl') {
+        fs = new EnsemblFeatureSource(config);
+    } else {
+        fs = new DASFeatureSource(config);
+    }
+
+    if (fs && config.overlay) {
+        var sources = [fs]
+        for (var oi = 0; oi < config.overlay.length; ++oi) {
+            sources.push(this.createFeatureSource(config.overlay[oi]));
+        }
+        fs = new OverlayFeatureSource(sources, config);
+    }
+
+    if (config.mapping) {
+        fs = new MappedFeatureSource(fs, this.chains[config.mapping]);
+    }
+
+    return fs;
 }
 
 
@@ -10206,6 +10372,30 @@ DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
         }
     );
 }
+
+DASFeatureSource.prototype.findNextFeature = this.sourceFindNextFeature = function(chr, pos, dir, callback) {
+    if (this.dasSource.capabilities && arrayIndexOf(this.dasSource.capabilities, 'das1:adjacent-feature') >= 0) {
+        var thisB = this;
+        if (this.dasAdjLock) {
+            return dlog('Already looking for a next feature, be patient!');
+        }
+        this.dasAdjLock = true;
+        var fops = {
+            adjacent: chr + ':' + (pos|0) + ':' + (dir > 0 ? 'F' : 'B')
+        }
+        var types = thisTier.getDesiredTypes(thisTier.browser.scale);
+        if (types) {
+            fops.types = types;
+        }
+        thisTier.dasSource.features(null, fops, function(res) {
+            thisB.dasAdjLock = false;
+            if (res.length > 0 && res[0] != null) {
+                dlog('DAS adjacent seems to be working...');
+                callback(res[0]);
+            }
+        });
+    }
+};
 
 function DASSequenceSource(dasSource) {
     this.dasSource = dasSource;
@@ -10399,6 +10589,23 @@ BWGFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
             }
             callback(null, features, fs);
         });
+    });
+}
+
+BWGFeatureSource.prototype.quantFindNextFeature = function(chr, pos, dir, threshold, callback) {
+    var beforeQFNF = Date.now()|0;
+    this.bwgHolder.res.thresholdSearch(chr, pos, dir, threshold, function(a, b) {
+        var afterQFNF = Date.now()|0;
+        console.log('QFNF took ' + (afterQFNF - beforeQFNF) + 'ms');
+        return callback(a, b);
+    });
+}
+
+BWGFeatureSource.prototype.findNextFeature = function(chr, pos, dir, callback) {
+    this.bwgHolder.res.getUnzoomedView().getFirstAdjacent(chr, pos, dir, function(res) {
+        if (res.length > 0 && res[0] != null) {
+            callback(res[0]);
+        }
     });
 }
 

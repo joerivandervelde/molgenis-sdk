@@ -749,7 +749,7 @@ BigWigView.prototype.readWigDataById = function(chr, min, max, callback) {
                                 }
                             } else if (blockType == BIG_WIG_TYPE_GRAPH) {
                                 for (var i = 0; i < itemCount; ++i) {
-                                    var start = la[(i*3) + 6] + 1;
+                                    var start = la[(i*3) + 6];
                                     var end   = la[(i*3) + 7];
                                     var score = fa[(i*3) + 8];
                                     if (start > end) {
@@ -1618,9 +1618,10 @@ function Browser(opts) {
         opts = {};
     }
 
-	//custom code
+	// custom code
     //this.uiPrefix = 'http://www.biodalliance.org/canvas/';
     this.uiPrefix = 'http://localhost:8080/';
+    // custom code
 
     this.sources = [];
     this.tiers = [];
@@ -2269,8 +2270,8 @@ Browser.prototype.realMakeTier = function(source) {
         } else {
             hoverTimeout = setTimeout(function() {
                 var hit = featureLookup(rx, ry);
-                if (hit) {
-                    thisB.notifyFeatureHover(ev, hit); // FIXME group
+                if (hit && hit.length > 0) {
+                    thisB.notifyFeatureHover(ev, hit[hit.length - 1], hit, tier);
                 }
             }, 1000);
         }
@@ -2282,7 +2283,7 @@ Browser.prototype.realMakeTier = function(source) {
         var rx = ev.clientX - br.left, ry = ev.clientY - br.top;
 
         var hit = featureLookup(rx, ry);
-        if (hit && !thisB.isDragging) {
+        if (hit && hit.length > 0 && !thisB.isDragging) {
             if (doubleClickTimeout) {
                 clearTimeout(doubleClickTimeout);
                 doubleClickTimeout = null;
@@ -2290,7 +2291,7 @@ Browser.prototype.realMakeTier = function(source) {
             } else {
                 doubleClickTimeout = setTimeout(function() {
                     doubleClickTimeout = null;
-                    thisB.notifyFeature(ev, hit);
+                    thisB.notifyFeature(ev, hit[hit.length-1], hit, tier);
                 }, 500);
             }
         }
@@ -2867,10 +2868,10 @@ Browser.prototype.addFeatureListener = function(handler, opts) {
     this.featureListeners.push(handler);
 }
 
-Browser.prototype.notifyFeature = function(ev, feature, group) {
+Browser.prototype.notifyFeature = function(ev, feature, hit, tier) {
   for (var fli = 0; fli < this.featureListeners.length; ++fli) {
       try {
-          this.featureListeners[fli](ev, feature, group);
+          this.featureListeners[fli](ev, feature, hit, tier);
       } catch (ex) {
           console.log(ex.stack);
       }
@@ -2882,10 +2883,10 @@ Browser.prototype.addFeatureHoverListener = function(handler, opts) {
     this.featureHoverListeners.push(handler);
 }
 
-Browser.prototype.notifyFeatureHover = function(ev, feature, group) {
+Browser.prototype.notifyFeatureHover = function(ev, feature, hit, tier) {
     for (var fli = 0; fli < this.featureHoverListeners.length; ++fli) {
         try {
-            this.featureHoverListeners[fli](ev, feature, group);
+            this.featureHoverListeners[fli](ev, feature, hit, tier);
         } catch (ex) {
             console.log(ex.stack);
         }
@@ -3032,7 +3033,12 @@ Browser.prototype.positionRuler = function() {
     }
 }
 
-Browser.prototype.featureDoubleClick = function(f, rx, ry) {
+Browser.prototype.featureDoubleClick = function(hit, rx, ry) {
+    if (!hit || hit.length == 0)
+        return;
+
+    f = hit[hit.length - 1];
+
     if (!f.min || !f.max) {
         return;
     }
@@ -3054,22 +3060,28 @@ Browser.prototype.featureDoubleClick = function(f, rx, ry) {
     this.setLocation(null, newMid - (width/2), newMid + (width/2));
 }
 
-function glyphLookup(glyphs, rx) {
+function glyphLookup(glyphs, rx, matches) {
+    matches = matches || [];
+
     for (var gi = 0; gi < glyphs.length; ++gi) {
         var g = glyphs[gi];
-        if (g.min() <= rx && g.max() >= rx) {
+        if (!g.notSelectable && g.min() <= rx && g.max() >= rx) {
             if (g.feature) {
-                return g.feature;
-            } else if (g.glyphs) {
-                return glyphLookup(g.glyphs, rx) || g.group;
+                matches.push(g.feature);
+            } else if (g.group) {
+                matches.push(g.group);
+            }
+    
+            if (g.glyphs) {
+                return glyphLookup(g.glyphs, rx, matches);
             } else if (g.glyph) {
-                return glyphLookup([g.glyph], rx) || g.group;
+                return glyphLookup([g.glyph], rx, matches);
             } else {
-                return g.group;
+                return matches;
             }
         }
     }
-    return null;
+    return matches;
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
@@ -3089,14 +3101,16 @@ Browser.prototype.addFeatureInfoPlugin = function(handler) {
     this.featureInfoPlugins.push(handler);
 }
 
-function FeatureInfo(feature, group) {
+function FeatureInfo(hit, feature, group) {
     var name = pick(group.type, feature.type);
     var fid = pick(group.label, feature.label, group.id, feature.id);
     if (fid && fid.indexOf('__dazzle') != 0) {
         name = name + ': ' + fid;
     }
 
+    this.hit = hit;
     this.feature = feature;
+    this.group = group;
     this.title = name;
     this.sections = [];
 }
@@ -3112,11 +3126,21 @@ FeatureInfo.prototype.add = function(label, info) {
     this.sections.push({label: label, info: info});
 }
 
-Browser.prototype.featurePopup = function(ev, feature, group) {
-    if (!feature) feature = {};
-    if (!group) group = {};
-    var featureInfo = new FeatureInfo(feature, group);
+Browser.prototype.featurePopup = function(ev, __ignored_feature, hit, tier) {
+    var hi = hit.length;
+    var feature = --hi >= 0 ? hit[hi] : {};
+    var group = --hi >= 0 ? hit[hi] : {};
+
+    var featureInfo = new FeatureInfo(hit, feature, group);
     var fips = this.featureInfoPlugins || [];
+    for (fipi = 0; fipi < fips.length; ++fipi) {
+        try {
+            fips[fipi](feature, featureInfo);
+        } catch (e) {
+            console.log(e.stack || e);
+        }
+    }
+    fips = tier.featureInfoPlugins || [];
     for (fipi = 0; fipi < fips.length; ++fipi) {
         try {
             fips[fipi](feature, featureInfo);
@@ -4355,7 +4379,8 @@ Browser.prototype.popit = function(ev, name, ele, opts)
         closeButton.addEventListener('mouseout', function(ev) {
             closeButton.style.color = 'black';
         }, false);
-        closeButton.addEventListener('mousedown', function(ev) {
+        closeButton.addEventListener('click', function(ev) {
+            ev.preventDefault(); ev.stopPropagation();
             thisB.removeAllPopups();
         }, false);
         var tbar = makeElement('h3', [makeElement('span', name, null, {maxWidth: '200px'}), closeButton], {className: 'popover-title'}, {});
@@ -4720,7 +4745,7 @@ DasTier.prototype.paint = function() {
     }
     gc.restore();
 
-    if (quant && this.quantLeapThreshold && this.featureSource && this.featureSource.quantFindNextFeature) {
+    if (quant && this.quantLeapThreshold && this.featureSource && sourceAdapterIsCapable(this.featureSource, 'quantLeap')) {
 	var ry = 3 + subtiers[0].height * (1.0 - ((this.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
 
 	gc.save();
@@ -5000,7 +5025,7 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 	var sc = ((score - (1.0*smin)) * yscale)|0;
 	quant = {min: smin, max: smax};
 
-	var fill = feature.override_color || style.BGCOLOR || style.COLOR1 || 'black';
+	var fill = feature.override_color || style.FGCOLOR || style.COLOR1 || 'black';
 	if (style.COLOR2) {
 	    var grad = style._gradient;
 	    if (!grad) {
@@ -5076,7 +5101,7 @@ DasTier.prototype.styleForFeature = function(f) {
         }
 
 	var labelRE = sh._labelRE;
-	if (!labelRE) {
+	if (!labelRE || !labelRE.test) {
 	    labelRE = new RegExp('^' + sh.label + '$');
 	    sh._labelRE = labelRE;
 	}
@@ -5084,7 +5109,7 @@ DasTier.prototype.styleForFeature = function(f) {
             continue;
         }
 	var methodRE = sh._methodRE;
-	if (!methodRE) {
+	if (!methodRE || !methodRE.test) {
 	    methodRE = new RegExp('^' + sh.method + '$');
 	    sh._methodRE = methodRE;
 	}
@@ -5472,14 +5497,16 @@ Browser.prototype.addFeatureInfoPlugin = function(handler) {
     this.featureInfoPlugins.push(handler);
 }
 
-function FeatureInfo(feature, group) {
+function FeatureInfo(hit, feature, group) {
     var name = pick(group.type, feature.type);
     var fid = pick(group.label, feature.label, group.id, feature.id);
     if (fid && fid.indexOf('__dazzle') != 0) {
         name = name + ': ' + fid;
     }
 
+    this.hit = hit;
     this.feature = feature;
+    this.group = group;
     this.title = name;
     this.sections = [];
 }
@@ -5495,11 +5522,21 @@ FeatureInfo.prototype.add = function(label, info) {
     this.sections.push({label: label, info: info});
 }
 
-Browser.prototype.featurePopup = function(ev, feature, group) {
-    if (!feature) feature = {};
-    if (!group) group = {};
-    var featureInfo = new FeatureInfo(feature, group);
+Browser.prototype.featurePopup = function(ev, __ignored_feature, hit, tier) {
+    var hi = hit.length;
+    var feature = --hi >= 0 ? hit[hi] : {};
+    var group = --hi >= 0 ? hit[hi] : {};
+
+    var featureInfo = new FeatureInfo(hit, feature, group);
     var fips = this.featureInfoPlugins || [];
+    for (fipi = 0; fipi < fips.length; ++fipi) {
+        try {
+            fips[fipi](feature, featureInfo);
+        } catch (e) {
+            console.log(e.stack || e);
+        }
+    }
+    fips = tier.featureInfoPlugins || [];
     for (fipi = 0; fipi < fips.length; ++fipi) {
         try {
             fips[fipi](feature, featureInfo);
@@ -6867,14 +6904,19 @@ Browser.prototype.saveSVG = function() {
 
     var margin = 200;
 
-    var dallianceAnchor = makeElementNS(NS_SVG, 'text', 'Graphics from Dalliance ' + VERSION, {
-        x: (b.featurePanelWidth + margin + 20)/2,
-        y: 30,
-        strokeWidth: 0,
-        fill: 'black',
-        fontSize: '12pt',
-	textAnchor: 'middle'
-    });
+    var dallianceAnchor = makeElementNS(NS_SVG, 'a',
+       makeElementNS(NS_SVG, 'text', 'Graphics from Dalliance ' + VERSION, {
+           x: (b.featurePanelWidth + margin + 20)/2,
+           y: 30,
+           strokeWidth: 0,
+           fill: 'black',
+           fontSize: '12pt',
+	   textAnchor: 'middle',
+	   fill: 'blue'
+       }));
+    dallianceAnchor.setAttribute('xmlns:xlink', NS_XLINK);
+    dallianceAnchor.setAttribute('xlink:href', 'http://www.biodalliance.org/');
+  
     saveRoot.appendChild(dallianceAnchor);
     
     var clipRect = makeElementNS(NS_SVG, 'rect', null, {
@@ -6887,13 +6929,17 @@ Browser.prototype.saveSVG = function() {
     saveRoot.appendChild(clip);
 
     var pos = 70;
-    var tierHolder = makeElementNS(NS_SVG, 'g', null, {clipPath: 'url(#featureClip)', clipRule: 'nonzero'});
+    var tierHolder = makeElementNS(NS_SVG, 'g', null, {/* clipPath: 'url(#featureClip)', clipRule: 'nonzero' */});
 
 
     for (var ti = 0; ti < b.tiers.length; ++ti) {
         var tier = b.tiers[ti];
-	var tierSVG = makeElementNS(NS_SVG, 'g');
+	var tierSVG = makeElementNS(NS_SVG, 'g', null, {clipPath: 'url(#featureClip)', clipRule: 'nonzero'});
+	var tierLabels = makeElementNS(NS_SVG, 'g');
 	var tierTopPos = pos;
+
+	var tierBackground = makeElementNS(NS_SVG, 'rect', null, {x: 0, y: tierTopPos, width: '10000', height: 50, fill: tier.background});
+	tierSVG.appendChild(tierBackground);
 
 	if (tier.dasSource.tier_type === 'sequence') {
 	    var seqTrack = svgSeqTier(tier, tier.currentSequence);
@@ -6914,20 +6960,36 @@ Browser.prototype.saveSVG = function() {
                     var glyph = subtier.glyphs[gi];
                     glyphElements.push(glyph.toSVG());
 		}
+
 		tierSVG.appendChild(makeElementNS(NS_SVG, 'g', glyphElements, {transform: 'translate(' + (margin+offset) + ', ' + pos + ')'}));
+
+		if (subtier.quant) {
+		    var q = subtier.quant;
+		    var path = new SVGPath();
+		    path.moveTo(margin + 5, pos);
+		    path.lineTo(margin, pos);
+		    path.lineTo(margin, pos + subtier.height);
+		    path.lineTo(margin + 5, pos + subtier.height);
+		    console.log(path.toPathData());
+		    tierLabels.appendChild(makeElementNS(NS_SVG, 'path', null, {d: path.toPathData(), fill: 'none', stroke: 'black', strokeWidth: '2px'}));
+		    tierLabels.appendChild(makeElementNS(NS_SVG, 'text', formatQuantLabel(q.max), {x: margin - 3, y: pos + 8, textAnchor: 'end'}));
+		    tierLabels.appendChild(makeElementNS(NS_SVG, 'text', formatQuantLabel(q.min), {x: margin - 3, y: pos +  subtier.height - 3, textAnchor: 'end'}));
+		}
+
 		pos += subtier.height + 3;
             }
 	    pos += 10;
 	}
 
-	saveRoot.appendChild(
+	tierLabels.appendChild(
 	    makeElementNS(
 		NS_SVG, 'text',
 		tier.dasSource.name,
-		{x: margin - 10, y: (pos+tierTopPos+12)/2, fontSize: '12pt', textAnchor: 'end'}));
+		{x: margin - 12, y: (pos+tierTopPos+5)/2, fontSize: '12pt', textAnchor: 'end'}));
 
-	tierHolder.appendChild(makeElementNS(NS_SVG, 'rect', null, {x: 0, y: tierTopPos, width: '10000', height: pos-tierTopPos, fill: tier.background}));
-	tierHolder.appendChild(tierSVG);
+	
+	tierBackground.setAttribute('height', pos - tierTopPos);
+	tierHolder.appendChild(makeElementNS(NS_SVG, 'g', [tierSVG, tierLabels]));
     }
     saveRoot.appendChild(tierHolder);
 
@@ -7144,11 +7206,21 @@ function DasTier(browser, source, viewport, holder, overlay, placard, placardCon
     this.y = 0;
     this.layoutWasDone = false;
 
+    if (source.featureInfoPlugin) {
+        this.addFeatureInfoPlugin(source.featureInfoPlugin);
+    }
+
     this.initSources();
 }
 
 DasTier.prototype.toString = function() {
     return this.id;
+}
+
+DasTier.prototype.addFeatureInfoPlugin = function(p) {
+    if (!this.featureInfoPlugins) 
+        this.featureInfoPlugins = [];
+    this.featureInfoPlugins.push(p);
 }
 
 DasTier.prototype.init = function() {
@@ -8458,7 +8530,7 @@ function removeChildren(node)
 // WARNING: not for general use!
 //
 
-function miniJSONify(o) {
+function miniJSONify(o, exc) {
     if (typeof o === 'undefined') {
         return 'undefined';
     } else if (o == null) {
@@ -8473,14 +8545,17 @@ function miniJSONify(o) {
         if (o instanceof Array) {
             var s = null;
             for (var i = 0; i < o.length; ++i) {
-                s = (s == null ? '' : (s + ', ')) + miniJSONify(o[i]);
+                s = (s == null ? '' : (s + ', ')) + miniJSONify(o[i], exc);
             }
             return '[' + (s?s:'') + ']';
         } else {
+            exc = exc || {};
             var s = null;
             for (var k in o) {
+                if (exc[k])
+                    continue;
                 if (k != undefined && typeof(o[k]) != 'function') {
-                    s = (s == null ? '' : (s + ', ')) + k + ': ' + miniJSONify(o[k]);
+                    s = (s == null ? '' : (s + ', ')) + k + ': ' + miniJSONify(o[k], exc);
                 }
             }
             return '{' + (s?s:'') + '}';
@@ -8629,8 +8704,8 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     // var REGION_PATTERN = /([\d+,\w,\.,\_,\-]+):([0-9,]+)([\-,\,.]+([0-9,]+))?/;
 
     if (!b.disableDefaultFeaturePopup) {
-        this.addFeatureListener(function(ev, hit) {
-            b.featurePopup(ev, hit, null);
+        this.addFeatureListener(function(ev, feature, hit, tier) {
+            b.featurePopup(ev, feature, hit, tier);
             
             // custom code
 			if(hit.typeId == "mutation"){ // could also use hit.type?
@@ -8902,9 +8977,10 @@ Browser.prototype.toggleHelpPopup = function(ev) {
     if (this.helpPopup && this.helpPopup.displayed) {
         this.removeAllPopups();
     } else {
-    	//custom code
+    	// custom code
         //var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
         var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'css/index.html'}, {width: '490px', height: '500px'});
+        // custom code
         this.helpPopup = this.popit(ev, 'Help', helpFrame, {width: 500});
     }
 }
@@ -10023,10 +10099,13 @@ PointGlyph.prototype.height = function() {
 }
 
 PointGlyph.prototype.draw = function(g) {
+    g.save();
+    g.globalAlpha = 0.3;
     g.fillStyle = this._fill;
     g.beginPath();
-    g.arc(this._x, this._y, 2, 0, 6.29);
+    g.arc(this._x, this._y, 1.5, 0, 6.29);
     g.fill();
+    g.restore();
 }
 
 PointGlyph.prototype.toSVG = function() {
@@ -10042,6 +10121,8 @@ PointGlyph.prototype.toSVG = function() {
 function GridGlyph(height) {
     this._height = height || 50;
 }
+
+GridGlyph.prototype.notSelectable = true;
 
 GridGlyph.prototype.min = function() {
     return -100000;
@@ -10083,7 +10164,8 @@ GridGlyph.prototype.toSVG = function() {
 	 fill: 'none',
 	 stroke: 'black',
 	 strokeWidth: '0.1px'});
-}/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
+}
+/* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 
 // Dalliance Genome Explorer
@@ -10150,6 +10232,12 @@ Browser.prototype.restoreStatus = function() {
         return;
     }
 
+    var defaultSourcesByConfigHash = {};
+    for (var si = 0; si < this.sources.length; ++si) {
+        var source = this.sources[si];
+        defaultSourcesByConfigHash[hex_sha1(miniJSONify(source))] = source;
+    }
+
     var qChr = localStorage['dalliance.' + this.cookieKey + '.view-chr'];
     var qMin = localStorage['dalliance.' + this.cookieKey + '.view-start']|0;
     var qMax = localStorage['dalliance.' + this.cookieKey + '.view-end']|0;
@@ -10173,6 +10261,17 @@ Browser.prototype.restoreStatus = function() {
     var sourceStr = localStorage['dalliance.' + this.cookieKey + '.sources'];
     if (sourceStr) {
 	this.sources = JSON.parse(sourceStr);
+        for (var si = 0; si < this.sources.length; ++si) {
+            var source = this.sources[si];
+            var hash = hex_sha1(miniJSONify(source, {props: true, coords: true}));
+            var oldSource = defaultSourcesByConfigHash[hash];
+            if (oldSource) {
+                if (oldSource.featureInfoPlugin) {
+                    // console.log('revivifying ' + hash);
+                    source.featureInfoPlugin = oldSource.featureInfoPlugin;
+                }
+            }
+        }
     }
 }
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
@@ -10188,32 +10287,50 @@ DasTier.prototype.initSources = function() {
     var thisTier = this;
     var fs = new DummyFeatureSource(), ss;
 
-    if (this.dasSource.bwgURI || this.dasSource.bwgBlob) {
-        fs = new BWGFeatureSource(this.dasSource);
-    } else if (this.dasSource.bamURI || this.dasSource.bamBlob) {
-        fs = new BAMFeatureSource(this.dasSource);
-    } else if (this.dasSource.bamblrURI) {
-        fs = new BamblrFeatureSource(this.dasSource);
-    } else if (this.dasSource.jbURI) {
-        fs = new JBrowseFeatureSource(this.dasSource);
-    } else if (this.dasSource.tier_type == 'sequence') {
+    if (this.dasSource.tier_type == 'sequence') {
         if (this.dasSource.twoBitURI) {
             ss = new TwoBitSequenceSource(this.dasSource);
         } else {
             ss = new DASSequenceSource(this.dasSource);
         }
-    } else if (this.dasSource.tier_type == 'ensembl') {
-        fs = new EnsemblFeatureSource(this.dasSource);
     } else {
-        fs = new DASFeatureSource(this.dasSource);
-    }
-    
-    if (this.dasSource.mapping) {
-        fs = new MappedFeatureSource(fs, this.browser.chains[this.dasSource.mapping]);
+        fs = this.browser.createFeatureSource(this.dasSource);
     }
 
     this.featureSource = fs;
     this.sequenceSource = ss;
+}
+
+Browser.prototype.createFeatureSource = function(config) {
+    var fs;
+
+    if (config.bwgURI || config.bwgBlob) {
+        fs =  new BWGFeatureSource(config);
+    } else if (config.bamURI || config.bamBlob) {
+        fs = new BAMFeatureSource(config);
+    } else if (config.bamblrURI) {
+        fs = new BamblrFeatureSource(config);
+    } else if (config.jbURI) {
+        fs = new JBrowseFeatureSource(config);
+    } else if (config.tier_type == 'ensembl') {
+        fs = new EnsemblFeatureSource(config);
+    } else {
+        fs = new DASFeatureSource(config);
+    }
+
+    if (fs && config.overlay) {
+        var sources = [fs]
+        for (var oi = 0; oi < config.overlay.length; ++oi) {
+            sources.push(this.createFeatureSource(config.overlay[oi]));
+        }
+        fs = new OverlayFeatureSource(sources, config);
+    }
+
+    if (config.mapping) {
+        fs = new MappedFeatureSource(fs, this.chains[config.mapping]);
+    }
+
+    return fs;
 }
 
 
@@ -10418,6 +10535,13 @@ BWGFeatureSource.prototype.init = function() {
     make(arg, function(bwg) {
         thisB.bwgHolder.provide(bwg);
     }, this.opts.credentials);
+}
+
+BWGFeatureSource.prototype.capabilities = function() {
+    var caps = {leap: true};
+    if (this.bwgHolder.res && this.bwgHolder.res.type == 'bigwig')
+        caps.quantLeap = true;
+    return caps;
 }
 
 BWGFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
@@ -10865,7 +10989,11 @@ JBrowseFeatureSource.prototype.fetch = function(chr, min, max, scale, types, poo
     );
 }
 
-
+function sourceAdapterIsCapable(s, cap) {
+    if (!s.capabilities)
+        return false;
+    else return s.capabilities()[cap];
+}
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 
