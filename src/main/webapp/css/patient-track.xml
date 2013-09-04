@@ -4,7 +4,7 @@
 			<TYPE id="default">
 				<GLYPH>
 					<BOX>
-						<BGCOLOR>gray</BGCOLOR>
+						<BGCOLOR>green</BGCOLOR>
 					</BOX>
 				</GLYPH>
 			</TYPE>

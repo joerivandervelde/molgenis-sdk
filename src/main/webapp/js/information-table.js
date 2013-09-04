@@ -8,7 +8,7 @@
 //
 
 function informationTable(features){
-	$('#tableHolder').html( '<table cellpadding="0" cellspacing="0" border="0" class="display" id="patientData"><thead><tr><th>ID</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>Phenotype</th><th>PubMed ID</th><th>Reference</th></tr></thead></table>' );
+	$('#tableHolder').html( '<table cellpadding="0" cellspacing="0" border="0" class="display" id="patientData"><thead><tr><th>ID</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>Phenotype</th><th>PubMed ID</th></tr></thead></table>' );
 	
 	$('#patientData').dataTable( {
 		"aaData": features.mut,
@@ -23,9 +23,12 @@ function informationTable(features){
            { "mData": "Consequence2" },
            { "mData": "ExonIntron2" },
            { "mData": "Pheno" },
-           { "mData": "PubMedID" },
-           { "mData": "Reference" }
-       ]
+           { "mData": "PubMedID" }
+       ],
+       "fnRowCallback": function( nRow, aData, iDisplayIndex ) {
+       		$('td:eq(10)', nRow).html('<a href="' + aData.Reference + '">' + aData.PubMedID + '</a>');
+       		return nRow;
+       }
     });
     
     $('#patientData tbody td').die('click').live('click', function(){
