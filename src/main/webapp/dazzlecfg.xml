@@ -37,4 +37,14 @@
     <string name="description" value="a demo for how to write a Dazzle plugin" />
     <string name="version" value="1.0" />
   </datasource>
+  <datasource id="lvvsnilv" jclass="services.XgapGenePlugin2LvVsNilv">
+    <string name="name" value="database_gene_test" />
+    <string name="description" value="a demo for how to write a Dazzle plugin" />
+    <string name="version" value="1.0" />
+  </datasource>
+  <datasource id="arvc" jclass="services.XgapGenePlugin2Arvc">
+    <string name="name" value="database_gene_test" />
+    <string name="description" value="a demo for how to write a Dazzle plugin" />
+    <string name="version" value="1.0" />
+  </datasource>
 </dazzle>

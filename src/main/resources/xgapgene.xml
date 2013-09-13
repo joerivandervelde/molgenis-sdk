@@ -80,6 +80,36 @@
 			<field name="Qual" type="string" />
 			<field name="Info" type="string" />
 		</entity>
+		
+		<entity name="LvVsNilvAnnotedGenes">
+			<field name="Id" type="autoid" />
+			<field name="EnsemblGeneID" type="string" />
+			<field name="GeneStart" type="int" />
+			<field name="GeneEnd" type="int" />
+			<field name="ChromosomeName" type="string" />
+			<field name="HGNCsymbol" type="string" />
+			<field name="Strand" type="string" />
+			<field name="Description" type="string" />
+		</entity>
+		
+		<entity name="Arvc">
+			<field name="Id" type="autoid" />
+			<field name="MutationID" type="int" nillable="true" />
+			<field name="Gene" type="string" nillable="true" />
+			<field name="Locus" type="string" nillable="true" />
+			<field name="Exon" type="string" nillable="true" />
+			<field name="Mutation" type="string" nillable="true" />
+			<field name="DNA_Change" type="string" nillable="true" />
+			<field name="Protein_Change" type="string" nillable="true" />
+			<field name="Type" type="string" nillable="true" />
+			<field name="Reported_Classification" type="string" nillable="true" />
+			<field name="No_of_clinical_report" type="int" nillable="true" />
+			<field name="Details" type="string" nillable="true" />
+			<field name="gDNA_Change" type="string" nillable="true" />
+			<field name="bpStart" type="int" nillable="true" />
+			<field name="bpEnd" type="int" nillable="true" />
+			<field name="Chromosome" type="int" nillable="true" />
+		</entity>
 
 	</module>
 </molgenis>

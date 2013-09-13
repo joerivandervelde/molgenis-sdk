@@ -33,4 +33,5 @@ public class MolgenisDbSettings implements MolgenisSettings
 	{
 		this.properties.put(key,value);
 	}
+
 }

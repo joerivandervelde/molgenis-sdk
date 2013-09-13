@@ -8,7 +8,7 @@
 //
 
 function informationTable(features){
-	$('#tableHolder').html( '<table cellpadding="0" cellspacing="0" border="0" class="display" id="patientData"><thead><tr><th>ID</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>cDNA change</th><th>Protein change</th><th>Consequence</th><th>Exon/Intron</th><th>Phenotype</th><th>PubMed ID</th></tr></thead></table>' );
+	$('#tableHolder').html( '<table cellpadding="0" cellspacing="0" border="0" class="display" id="patientData"><thead><tr><th>ID</th><th>cDNA change1</th><th>Protein change1</th><th>Consequence1</th><th>Exon/Intron1</th><th>cDNA change2</th><th>Protein change2</th><th>Consequence2</th><th>Exon/Intron2</th><th>Phenotype</th><th>PubMed ID</th></tr></thead></table>' );
 	
 	$('#patientData').dataTable( {
 		"aaData": features.mut,
@@ -39,7 +39,7 @@ function informationTable(features){
 		
 		if(match){ // check if we have a patient id
 			var source = [{name: 'Patient ' + cell,
-	                       uri: 'http://localhost:8080/das/patient&pid=' + cell,
+	                       uri: 'http://localhost:8080/das/patient&pid=' + cell + '/', // *
 	                       desc: 'experiment',
 	                       stylesheet_uri: 'http://localhost:8080/css/patient-track.xml'}];
         	
@@ -48,3 +48,8 @@ function informationTable(features){
 	    }
     });
 }
+
+// * The slash after the uri is needed so the custom patient track can be removed.
+// Removal is done based on uri of the track, looping through the track and comparing them to the known
+// uri that has to be removed.
+// However the uri used to compare has a slash on the end.

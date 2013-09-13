@@ -1619,7 +1619,6 @@ function Browser(opts) {
     }
 
 	// custom code
-    //this.uiPrefix = 'http://www.biodalliance.org/canvas/';
     this.uiPrefix = 'http://localhost:8080/';
     // custom code
 
@@ -1640,7 +1639,8 @@ function Browser(opts) {
         speciesName: 'Human',
         taxon: 9606,
         auth: 'NCBI',
-        version: '36'
+        version: '36',
+        ucscName: 'hg18'
     };
     this.chains = {};
 
@@ -1649,12 +1649,12 @@ function Browser(opts) {
     this.minExtra = 0.5;
     this.zoomFactor = 1.0;
     this.zoomMin = 10.0;
-    this.zoomMax = 220.0;
+    this.zoomMax;       // Allow configuration for compatibility, but otherwise clobber.
     this.origin = 0;
     this.targetQuantRes = 5.0;
     this.featurePanelWidth = 750;
     this.zoomBase = 100;
-    this.zoomExpt = 30; // Now gets clobbered.
+    this.zoomExpt = 30.0; // Back to being fixed....
     this.zoomSliderValue = 100;
     this.entryPoints = null;
     this.currentSeqMax = -1; // init once EPs are fetched.
@@ -1670,6 +1670,8 @@ function Browser(opts) {
     this.selectedTier = 1;
 
     this.placards = [];
+
+    this.maxViewWidth = 500000;
 
     // Options.
     
@@ -1691,6 +1693,9 @@ function Browser(opts) {
     this.availableSources = new Observed();
     this.defaultSources = [];
     this.mappableSources = {};
+
+    this.hubs = [];
+    this.hubObjects = [];
 
     for (var k in opts) {
         this[k] = opts[k];
@@ -1750,7 +1755,10 @@ Browser.prototype.realInit = function() {
     // Dimension stuff
 
     this.scale = this.featurePanelWidth / (this.viewEnd - this.viewStart);
-    this.zoomExpt = 250 / Math.log(/* MAX_VIEW_SIZE */ 500000.0 / this.zoomBase);
+    // this.zoomExpt = 250 / Math.log(/* MAX_VIEW_SIZE */ 500000.0 / this.zoomBase);
+    if (!this.zoomMax) {
+        this.zoomMax = this.zoomExpt * Math.log(this.maxViewWidth / this.zoomBase);
+    }
     this.zoomSliderValue = this.zoomExpt * Math.log((this.viewEnd - this.viewStart + 1) / this.zoomBase);
 
     // Event handlers
@@ -1971,7 +1979,7 @@ Browser.prototype.realInit = function() {
             thisB.zoomStep(10);
         } else if (ev.keyCode == 72 || ev.keyCode == 104) { // h
             ev.stopPropagation(); ev.preventDefault();
-            b.toggleHelpPopup(ev);
+            thisB.toggleHelpPopup(ev);
         } else if (ev.keyCode == 73 || ev.keyCode == 105) { // i
             ev.stopPropagation(); ev.preventDefault();
             var t = thisB.tiers[thisB.selectedTier];
@@ -2068,6 +2076,18 @@ Browser.prototype.realInit = function() {
     this.queryRegistry();
     for (var m in this.chains) {
         this.queryRegistry(m, true);
+    }
+
+    if (this.hubs) {
+        for (var hi = 0; hi < this.hubs.length; ++hi) {
+            connectTrackHub(this.hubs[hi], function(hub, err) {
+                if (err) {
+                    console.log(err);
+                } else {
+                    thisB.hubObjects.push(hub);
+                }
+            });
+        }
     }
 }
 
@@ -2729,6 +2749,7 @@ Browser.prototype.resizeViewer = function(skipRefresh) {
 Browser.prototype.addTier = function(conf) {
     this.sources.push(conf);
     this.makeTier(conf);
+    this.positionRuler();
     this.notifyTier();
 }
 
@@ -2901,7 +2922,7 @@ Browser.prototype.addViewListener = function(handler, opts) {
 Browser.prototype.notifyLocation = function() {
     for (var lli = 0; lli < this.viewListeners.length; ++lli) {
         try {
-            this.viewListeners[lli](this.chr, this.viewStart|0, this.viewEnd|0, this.zoomSliderValue);
+            this.viewListeners[lli](this.chr, this.viewStart|0, this.viewEnd|0, this.zoomSliderValue, {current: this.zoomSliderValue, min: this.zoomMin, max: this.zoomMax});
         } catch (ex) {
             console.log(ex.stack);
         }
@@ -3457,6 +3478,7 @@ var palette = {
 };
 
 var COLOR_RE = new RegExp('^#([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})([0-9A-Fa-f]{2})$');
+var CSS_COLOR_RE = /rgb\(([0-9]+),([0-9]+),([0-9]+)\)/
 
 function dasColourForName(name) {
     var c = palette[name];
@@ -3466,9 +3488,15 @@ function dasColourForName(name) {
             c = new DColour(('0x' + match[1])|0, ('0x' + match[2])|0, ('0x' + match[3])|0, name);
             palette[name] = c;
         } else {
-            dlog("couldn't handle color: " + name);
-            c = palette.black;
-            palette[name] = c;
+	    match = CSS_COLOR_RE.exec(name);
+	    if (match) {
+		c = new DColour(match[1]|0, match[2]|0, match[3]|0, name);
+		palette[name] = c;
+	    } else {
+		console.log("couldn't handle color: " + name);
+		c = palette.black;
+		palette[name] = c;
+	    }
         }
     }
     return c;
@@ -4383,7 +4411,7 @@ Browser.prototype.popit = function(ev, name, ele, opts)
             ev.preventDefault(); ev.stopPropagation();
             thisB.removeAllPopups();
         }, false);
-        var tbar = makeElement('h3', [makeElement('span', name, null, {maxWidth: '200px'}), closeButton], {className: 'popover-title'}, {});
+        var tbar = makeElement('h4', [makeElement('span', name, null, {maxWidth: '200px'}), closeButton], {/*className: 'popover-title' */}, {paddingLeft: '10px', paddingRight: '10px'});
 
         var dragOX, dragOY;
         var moveHandler, upHandler;
@@ -4902,7 +4930,7 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
     var rawMaxPos = ((max - origin + 1) * scale);
     var maxPos = Math.max(rawMaxPos, minPos + 1);
 
-    var height = style.HEIGHT || forceHeight || 12;;
+    var height = tier.forceHeight || style.HEIGHT || forceHeight || 12;
     var requiredHeight = height = 1.0 * height;
     var bump = style.BUMP && isDasBooleanTrue(style.BUMP);
 
@@ -4911,8 +4939,11 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
     if (gtype === 'CROSS' || gtype === 'EX' || gtype === 'TRIANGLE' || gtype === 'DOT') {
 	var stroke = style.FGCOLOR || 'black';
         var fill = style.BGCOLOR || 'none';
-        var height = style.HEIGHT || forceHeight || 12;
+        var height = tier.forceHeight || style.HEIGHT || forceHeight || 12;
+	var size = style.SIZE || height;
+
         requiredHeight = height = 1.0 * height;
+	size = 1.0 * size;
 
         var mid = (minPos + maxPos)/2;
         var hh = height/2;
@@ -4921,15 +4952,51 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
         var bMinPos = minPos, bMaxPos = maxPos;
 
 	if (gtype === 'EX') {
-	    gg = new ExGlyph(mid, height, stroke);
+	    gg = new ExGlyph(mid, size, stroke);
 	} else if (gtype === 'TRIANGLE') {
 	    var dir = style.DIRECTION || 'N';
 	    var width = style.LINEWIDTH || height;
-	    gg = new TriangleGlyph(mid, height, dir, width, stroke);
+	    gg = new TriangleGlyph(mid, size, dir, width, stroke);
 	} else if (gtype === 'DOT') {
-	    gg = new DotGlyph(mid, height, stroke);
+	    gg = new DotGlyph(mid, size, stroke);
 	} else {
-	    gg = new CrossGlyph(mid, height, stroke);
+	    gg = new CrossGlyph(mid, size, stroke);
+	}
+
+	if (isDasBooleanTrue(style.SCATTER)) {
+	    var smin = tier.dasSource.forceMin || style.MIN || tier.currentFeaturesMinScore;
+            var smax = tier.dasSource.forceMax || style.MAX || tier.currentFeaturesMaxScore;
+
+            if (!smax) {
+		if (smin < 0) {
+                    smax = 0;
+		} else {
+                    smax = 10;
+		}
+            }
+            if (!smin) {
+		smin = 0;
+            }
+
+            if ((1.0 * score) < (1.0 *smin)) {
+		score = smin;
+            }
+            if ((1.0 * score) > (1.0 * smax)) {
+		score = smax;
+            }
+            var relScore = ((1.0 * score) - smin) / (smax-smin);
+	    var relOrigin = (-1.0 * smin) / (smax - smin);
+
+	    if (relScore >= relOrigin) {
+		height = Math.max(1, (relScore - relOrigin) * requiredHeight);
+		y = y + ((1.0 - relOrigin) * requiredHeight) - height;
+	    } else {
+		height = Math.max(1, (relScore - relOrigin) * requiredHeight);
+		y = y + ((1.0 - relOrigin) * requiredHeight);
+	    }
+	    
+	    quant = {min: smin, max: smax};
+	    gg = new TranslatedGlyph(gg, 0, y, requiredHeight);
 	}
     } else if (gtype === 'HISTOGRAM' || gtype === 'GRADIENT' && score !== 'undefined') {
 	var smin = tier.dasSource.forceMin || style.MIN || tier.currentFeaturesMinScore;
@@ -4968,6 +5035,7 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 
 	var stroke = style.FGCOLOR || null;
 	var fill = feature.override_color || style.BGCOLOR || style.COLOR1 || 'green';
+	var alpha = style.ALPHA ? (1.0 * style.ALPHA) : null;
 
 	if (style.COLOR2) {
 	    var grad = style._gradient;
@@ -4980,9 +5048,9 @@ function glyphForFeature(feature, y, style, tier, forceHeight, noLabel)
 	    if (step < 0) step = 0;
 	    if (step >= grad.length) step = grad.length - 1;
 	    fill = grad[step];
-        } 
+        }
 
-	gg = new BoxGlyph(minPos, y, (maxPos - minPos), height,fill, stroke);
+	gg = new BoxGlyph(minPos, y, (maxPos - minPos), height, fill, stroke, alpha);
     } else if (gtype === 'HIDDEN') {
 	gg = new PaddedGlyph(null, minPos, maxPos);
 	noLabel = true;
@@ -6048,7 +6116,7 @@ KnownSpace.prototype.provision = function(tier, chr, min, max, actualScale, want
         
         // console.log('features=' + features.length + '; maybe=' + mayDownsample + '; actualScale=' + actualScale + '; thisScale=' + this.scale + '; wanted=' + wantedTypes);	
 
-        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts || !src.opts.forceReduction)) ||
+        if ((actualScale < (this.scale/2) && features.length > 200 && (!src.opts || (!src.opts.forceReduction && !src.opts.noDownsample))) ||
             (mayDownsample && wantedTypes && wantedTypes.length == 1 && wantedTypes.indexOf('density') >= 0))
         {
             features = downsample(features, this.scale);
@@ -6970,7 +7038,6 @@ Browser.prototype.saveSVG = function() {
 		    path.lineTo(margin, pos);
 		    path.lineTo(margin, pos + subtier.height);
 		    path.lineTo(margin + 5, pos + subtier.height);
-		    console.log(path.toPathData());
 		    tierLabels.appendChild(makeElementNS(NS_SVG, 'path', null, {d: path.toPathData(), fill: 'none', stroke: 'black', strokeWidth: '2px'}));
 		    tierLabels.appendChild(makeElementNS(NS_SVG, 'text', formatQuantLabel(q.max), {x: margin - 3, y: pos + 8, textAnchor: 'end'}));
 		    tierLabels.appendChild(makeElementNS(NS_SVG, 'text', formatQuantLabel(q.min), {x: margin - 3, y: pos +  subtier.height - 3, textAnchor: 'end'}));
@@ -7169,10 +7236,228 @@ function rangeOrder(a, b)
 
 // 
 // Dalliance Genome Explorer
-// (c) Thomas Down 2006-2011
+// (c) Thomas Down 2006-2013
 //
 // thub.js: support for track-hub style registries
 //
+
+var THUB_STANZA_REGEXP = /\n\n+/;
+var THUB_PARSE_REGEXP  = /(\w+) +(.+)\n?/;
+
+function TrackHub() {
+    this.genomes = {};
+}
+
+function TrackHubTrack() {
+}
+
+function TrackHubDB() {
+}
+
+TrackHubDB.prototype.getTracks = function(callback) {
+    var thisB = this;
+    if (this._tracks) {
+        return callback(this._tracks);
+    } 
+    
+    textXHR(this.absURL, function(trackFile, err) {
+        if (err) {
+            return callback(null, err);
+        }
+
+        trackFile = trackFile.replace('\\\n', ' ');
+
+        var tracks = [];
+        var tracksById = {};
+        stanzas = trackFile.split(THUB_STANZA_REGEXP);
+        for (var s = 0; s < stanzas.length; ++s) {
+            var toks = stanzas[s].split(THUB_PARSE_REGEXP);
+            var track = new TrackHubTrack();
+            for (var l = 0; l < toks.length - 2; l += 3) {
+                track[toks[l+1]] = toks[l+2];
+            }
+
+            if (track.track && (track.type || track.container)) {
+                tracks.push(track);
+                tracksById[track.track] = track;
+            }
+        }
+        
+        var toplevels = [];
+        for (var ti = 0; ti < tracks.length; ++ti) {
+            var track = tracks[ti];
+            var top = true;
+            if (track.parent) {
+                var parent = tracksById[track.parent];
+                if (parent) {
+                    if (!parent.children)
+                        parent.children = [];
+                    parent.children.push(track);
+
+                    if (parent.container == 'multiWig')
+                        top = false;
+                }
+            }
+            if (top)
+                toplevels.push(track);
+        }
+            
+        thisB._tracks = toplevels;
+        return callback(thisB._tracks, null);
+    });
+}
+
+function connectTrackHub(hubURL, callback) {
+    textXHR(hubURL, function(hubFile, err) {
+        if (err) {
+            return callback(null, err);
+        }
+
+        var toks = hubFile.split(THUB_PARSE_REGEXP);
+        var hub = new TrackHub();
+        for (var l = 0; l < toks.length - 2; l += 3) {
+            hub[toks[l+1]] = toks[l+2];
+        }
+        
+        
+        if (hub.genomesFile) {
+            var genURL = relativeURL(hubURL, hub.genomesFile);
+            textXHR(genURL, function(genFile, err) {
+                if (err) {
+                    return callback(null, err);
+                }
+
+                stanzas = genFile.split(THUB_STANZA_REGEXP);
+                for (var s = 0; s < stanzas.length; ++s) {
+                    var toks = stanzas[s].split(THUB_PARSE_REGEXP);
+                    var gprops = new TrackHubDB();
+                    for (var l = 0; l < toks.length - 2; l += 3) {
+                        gprops[toks[l+1]] = toks[l+2];
+                    }
+                    if (gprops.genome && gprops.trackDb) {
+                        gprops.absURL = relativeURL(genURL, gprops.trackDb);
+                        hub.genomes[gprops.genome] = gprops;
+                    }
+                }
+
+                callback(hub);
+                        
+            });
+        } else {
+            callback(null, 'No genomesFile');
+        }
+    })
+}
+
+
+TrackHubTrack.prototype.toDallianceSource = function() {
+    var source = {
+        name: this.shortLabel,
+        desc: this.longLabel
+    };
+
+    if (this.container == 'multiWig') {
+        source.merge = 'concat';
+        source.overlay = [];
+        var children = this.children || [];
+        source.style = [];
+        source.noDownsample = true;
+
+        for (var ci = 0; ci < children.length; ++ci) {
+            var ch = children[ci];
+            var cs = ch.toDallianceSource()
+            source.overlay.push(cs);
+
+            if (cs.style) {
+                for (var si = 0; si < cs.style.length; ++si) {
+                    var style = cs.style[si];
+                    style.method = ch.shortLabel;  // FIXME
+                    if (this.aggregate == 'transparentOverlay')
+                        style.style.ALPHA = 0.5;
+                    source.style.push(style);
+                }
+            }
+        }
+        return source;
+
+        
+    } else {
+        typeToks = this.type.split(/\s+/);
+        if (typeToks[0] == 'bigBed') {
+            source.bwgURI = this.bigDataUrl;
+            return source;
+        } else if (typeToks[0] == 'bigWig') {
+            source.bwgURI = this.bigDataUrl;
+            source.style = this.bigwigStyles();
+            source.noDownsample = true;     // FIXME seems like a blunt instrument...
+            
+            if (this.yLineOnOff && this.yLineOnOff == 'on') {
+                source.quantLeapThreshold = this.yLineMark !== undefined ? (1.0 * this.yLineMark) : 0.0;
+            }
+
+            return source;
+        } else if (typeToks[0] == 'bam') {
+            source.bamURI = this.bigDataUrl;
+            return source;
+        } else {
+            console.log('Unsupported ' + this.type);
+        }
+    }
+}
+
+TrackHubTrack.prototype.bigwigStyles = function() {
+    var min, max;
+    if (typeToks.length >= 3) {
+        min = 1.0 * typeToks[1];
+        max = 1.0 * typeToks[2];
+    }
+
+    var height;
+    if (this.maxHeightPixels) {
+        var mhpToks = this.maxHeightPixels.split(/:/);
+        if (mhpToks.length == 3) {
+            height = mhpToks[1] | 0;
+        } else {
+            console.log('maxHeightPixels should be of the form max:default:min');
+        }
+    }
+    
+    var gtype = 'bars';
+    if (this.graphTypeDefault) {
+        gtype = this.graphTypeDefault;
+    }
+    
+    var color = 'black';
+    var altColor = null;
+    if (this.color) {
+        color = 'rgb(' + this.color + ')';
+    }
+    if (this.altColor) {
+        altColor = 'rgb(' + this.altColor + ')';
+    }
+    
+    var stylesheet = new DASStylesheet();
+    var wigStyle = new DASStyle();
+    if (gtype == 'points') {
+        wigStyle.glyph = 'POINT';
+    } else {
+        wigStyle.glyph = 'HISTOGRAM';
+    }
+
+    if (altColor) {
+        wigStyle.COLOR1 = color;
+        wigStyle.COLOR2 = altColor;
+    } else {
+        wigStyle.BGCOLOR = color;
+    }
+    wigStyle.HEIGHT = height || 30;
+    if (min || max) {
+        wigStyle.MIN = min;
+        wigStyle.MAX = max;
+    }
+    stylesheet.pushStyle({type: 'default'}, null, wigStyle);
+    return stylesheet.styles;
+}
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 
@@ -7481,10 +7766,17 @@ DasTier.prototype.drawOverlay = function() {
 // track-adder.js
 //
 
+function sourceURI(source) {
+    // FIXME
+    return source.uri || source.bwgURI || source.bamURI;
+}
+
 Browser.prototype.currentlyActive = function(source) {
+    var suri = sourceURI(source);
     for (var i = 0; i < this.tiers.length; ++i) {
         var ts = this.tiers[i].dasSource;
-        if (ts.uri == source.uri || ts.uri == source.uri + '/') {
+        var tsuri = sourceURI(ts);
+        if (tsuri == suri || tsuri == suri + '/') {
             // Special cases where we might meaningfully want two tiers of the same URI.
             if (ts.tier_type) {
                 if (!source.tier_type || source.tier_type != ts.tier_type) {
@@ -7536,6 +7828,7 @@ Browser.prototype.showTrackAdder = function(ev) {
     var makeStab, makeStabObserver;
     var regButton = this.makeButton('Registry', 'Browse compatible datasources from the DAS registry');
     addModeButtons.push(regButton);
+    
     for (var m in this.mappableSources) {
         var mf  = function(mm) {
             var mapButton = thisB.makeButton(thisB.chains[mm].srcTag, 'Browse datasources mapped from ' + thisB.chains[mm].srcTag);
@@ -7547,14 +7840,50 @@ Browser.prototype.showTrackAdder = function(ev) {
             }, false);
         }; mf(m);
     }
+    
+
+    var makeHubButton = function(hub) {
+        if (thisB.coordSystem.ucscName && hub.genomes[thisB.coordSystem.ucscName]) {
+            var hubButton = thisB.makeButton(hub.shortLabel, hub.longLabel);
+            addModeButtons.push(hubButton);
+            hubButton.addEventListener('click', function(ev) {
+                ev.preventDefault(); ev.stopPropagation();
+
+                hub.genomes[thisB.coordSystem.ucscName].getTracks(function(tracks, err) {
+                    if (err) {
+                        console.log(err);
+                    }
+
+                    activateButton(addModeButtons, hubButton);
+                    var hubTracks = [];
+                    for (var ti = 0; ti < tracks.length; ++ti) {
+                        var t = tracks[ti].toDallianceSource();
+                        if (t)
+                            hubTracks.push(t);
+                    }
+                    makeStab(new Observed(hubTracks));
+                });
+            }, false);
+            return hubButton;
+        }
+    }
+    for (var hi = 0; hi < this.hubObjects.length; ++hi) {
+        var hub = this.hubObjects[hi];
+        makeHubButton(hub);
+    }
+
     var defButton = this.makeButton('Defaults', 'Browse the default set of data for this browser');
     addModeButtons.push(defButton);
     var custButton = this.makeButton('Custom', 'Add arbitrary DAS data');
     addModeButtons.push(custButton);
     var binButton = this.makeButton('Binary', 'Add data in bigwig or bigbed format');
     addModeButtons.push(binButton);
+    var addHubButton = this.makeButton('+', 'Connect to a new track-hub');
+    addModeButtons.push(addHubButton);
+
     activateButton(addModeButtons, regButton);
-    popup.appendChild(makeElement('ul', addModeButtons, {className: 'nav nav-tabs'}));
+    var modeButtonHolder = makeElement('ul', addModeButtons, {className: 'nav nav-tabs'});
+    popup.appendChild(modeButtonHolder);
     
     popup.appendChild(makeElement('div', null, {}, {clear: 'both', height: '10px'})); // HACK only way I've found of adding appropriate spacing in Gecko.
     
@@ -7664,6 +7993,11 @@ Browser.prototype.showTrackAdder = function(ev) {
         activateButton(addModeButtons, binButton);
         switchToBinMode();
     }, false);
+    addHubButton.addEventListener('click', function(ev) {
+        ev.preventDefault(); ev.stopPropagation();
+        activateButton(addModeButtons, addHubButton);
+        switchToHubConnectMode();
+    }, false);
 
 
     function switchToBinMode() {
@@ -7695,6 +8029,20 @@ Browser.prototype.showTrackAdder = function(ev) {
             stabHolder.appendChild(makeElement('p', 'Browsers currently known to support this feature include Google Chrome 9 or later and Mozilla Firefox 4 or later.'));
         }
         
+    }
+
+    function switchToHubConnectMode() {
+        customMode = 'hub-connect';
+        refreshButton.style.visibility = 'hidden';
+
+        removeChildren(stabHolder);
+
+        stabHolder.appendChild(makeElement('h2', 'Connect to a track hub.'));
+        stabHolder.appendChild(makeElement('p', ['Enter the top-level URL (usually points to a file called "hub.txt" of a UCSC-style track hub']));
+        
+        custURL = makeElement('input', '', {size: 120, value: 'http://www.biodalliance.org/datasets/testhub/hub.txt'});
+        stabHolder.appendChild(custURL);
+        custURL.focus();
     }
 
     custButton.addEventListener('click', function(ev) {
@@ -7760,6 +8108,8 @@ Browser.prototype.showTrackAdder = function(ev) {
                 switchToCustomMode();
             } else if (customMode === 'reset-bin') {
                 switchToBinMode(); 
+            } else if (customMode === 'reset-hub') {
+                switchToHubConnectMode();
             } else if (customMode === 'prompt-bai') {
                 var fileList = custFile.files;
                 if (fileList && fileList.length > 0 && fileList[0]) {
@@ -7786,19 +8136,50 @@ Browser.prototype.showTrackAdder = function(ev) {
                     dataToFinalize.xPass = custPass.value;
                 }
 
-                thisB.sources.push(dataToFinalize);
-                thisB.makeTier(dataToFinalize);
-                //thisB.storeStatus();
+                thisB.addTier(dataToFinalize);
                 thisB.removeAllPopups();
+            } else if (customMode === 'hub-connect') {
+                var curi = custURL.value.trim();
+                if (!/^.+:\/\//.exec(curi)) {
+                    curi = 'http://' + curi;
+                }
+                console.log('hub: ' + curi);
+                connectTrackHub(curi, function(hub, err) {
+                    if (err) {
+                        removeChildren(stabHolder);
+                        stabHolder.appendChild(makeElement('h2', 'Error connecting to track hub'))
+                        stabHolder.appendChild(makeElement('p', err));
+                        customMode = 'reset-hub';
+                        return;
+                    } else {
+                        thisB.hubs.push(curi);
+                        thisB.hubObjects.push(hub);
+
+                        var hubButton = makeHubButton(hub);
+                        modeButtonHolder.appendChild(hubButton);
+                        activateButton(addModeButtons, hubButton);
+
+                        
+                        // FIXME redundant with hub-tab click handler.
+                        
+                        hub.genomes[thisB.coordSystem.ucscName].getTracks(function(tracks, err) {
+                            var hubTracks = [];
+                            for (var ti = 0; ti < tracks.length; ++ti) {
+                                var t = tracks[ti].toDallianceSource();
+                                if (t)
+                                    hubTracks.push(t);
+                            }
+                            makeStab(new Observed(hubTracks));
+                        });
+                    }
+                });
             }
         } else {
             for (var bi = 0; bi < addButtons.length; ++bi) {
                 var b = addButtons[bi];
                 if (b.checked) {
                     var nds = b.dalliance_source;
-                    thisB.sources.push(nds);
-                    thisB.makeTier(nds);
-                    // thisB.storeStatus();
+                    thisB.addTier(nds);
                 }
             }
             thisB.removeAllPopups();
@@ -8626,6 +9007,34 @@ Awaited.prototype.await = function(f) {
     }
 }
 
+function textXHR(url, callback) {
+    var req = new XMLHttpRequest();
+    req.onreadystatechange = function() {
+	if (req.readyState == 4) {
+	    if (req.status >= 300) {
+		callback(null, 'Error code ' + req.status);
+	    } else {
+		callback(req.responseText);
+	    }
+	}
+    };
+    
+    req.open('GET', url, true);
+    req.responseType = 'text';
+    req.send('');
+}
+
+function relativeURL(base, rel) {
+    // FIXME quite naive -- good enough for trackhubs?
+
+    var li = base.lastIndexOf('/');
+    if (li >= 0) {
+        return base.substr(0, li + 1) + rel;
+    } else {
+        return rel;
+    }
+}
+
 
 //
 // Missing APIs
@@ -8648,8 +9057,8 @@ if (!('trim' in String.prototype)) {
 var VERSION = {
     CONFIG: 3,
     MAJOR:  0,
-    MINOR:  8,
-    MICRO:  9,
+    MINOR:  9,
+    MICRO:  1,
     PATCH:  '',
     BRANCH: 'dev'
 }
@@ -8708,8 +9117,8 @@ Browser.prototype.initUI = function(holder, genomePanel) {
             b.featurePopup(ev, feature, hit, tier);
             
             // custom code
-			if(hit.typeId == "mutation"){ // could also use hit.type?
-				var url = 'http://localhost:8080/mutation?hit=' + hit.id
+			if(hit[0].typeId == "mutation"){ // could also use hit.type?
+				var url = 'http://localhost:8080/mutation?hit=' + hit[0].id
 				console.log(url);
 				$.ajax({
 					url: url,
@@ -8775,10 +9184,12 @@ Browser.prototype.initUI = function(holder, genomePanel) {
     holder.appendChild(toolbar);
     holder.appendChild(genomePanel);
 
-    this.addViewListener(function(chr, min, max, zoom) {
+    this.addViewListener(function(chr, min, max, _oldZoom, zoom) {
         locField.value = '';
         locField.placeholder = ('chr' + chr + ':' + formatLongInt(min) + '..' + formatLongInt(max));
-        zoomSlider.value = zoom;
+        zoomSlider.min = zoom.min;
+        zoomSlider.max = zoom.max;
+        zoomSlider.value = zoom.current;
         if (b.storeStatus) {
             b.storeStatus();
         }
@@ -8978,8 +9389,7 @@ Browser.prototype.toggleHelpPopup = function(ev) {
         this.removeAllPopups();
     } else {
     	// custom code
-        //var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'help/index.html'}, {width: '490px', height: '500px'});
-        var helpFrame = makeElement('iframe', null, {src: b.uiPrefix + 'css/index.html'}, {width: '490px', height: '500px'});
+        var helpFrame = makeElement('iframe', null, {src: this.uiPrefix + 'css/index.html'}, {width: '490px', height: '500px'});
         // custom code
         this.helpPopup = this.popit(ev, 'Help', helpFrame, {width: 500});
     }
@@ -8992,12 +9402,14 @@ Browser.prototype.toggleOptsPopup = function(ev) {
         this.removeAllPopups();
     } else {
         var optsForm = makeElement('form', null, {className: 'popover-content form-horizontal'});
-
+        var optsTable = makeElement('table');
+        optsTable.cellPadding = 5;
         var scrollModeButton = makeElement('input', '', {type: 'checkbox', checked: b.reverseScrolling});
         scrollModeButton.addEventListener('change', function(ev) {
             b.reverseScrolling = scrollModeButton.checked;
         }, false);
-        optsForm.appendChild(makeElement('div', [makeElement('label', 'Reverse trackpad scrolling', {className: 'control-label'}), scrollModeButton], {className: 'control-group'}));
+        optsTable.appendChild(makeElement('tr', [makeElement('td', 'Reverse trackpad scrolling', {align: 'right'}), makeElement('td', scrollModeButton)]));
+
 
         var rulerSelect = makeElement('select');
         rulerSelect.appendChild(makeElement('option', 'Left', {value: 'left'}));
@@ -9012,9 +9424,9 @@ Browser.prototype.toggleOptsPopup = function(ev) {
                 b.tiers[ti].paintQuant();
             }
         }, false);
-        optsForm.appendChild(makeElement('div', [makeElement('label', 'Display ruler', {className: 'control-label'}), rulerSelect], {className: 'control-group'}));
+        optsTable.appendChild(makeElement('tr', [makeElement('td', 'Vertical guideline', {align: 'right'}), makeElement('td', rulerSelect)]));
         
-
+        optsForm.appendChild(optsTable);
         this.removeAllPopups();
         this.optsPopup = this.popit(ev, 'Options', optsForm, {width: 500});
     }
@@ -9027,13 +9439,14 @@ Browser.prototype.toggleOptsPopup = function(ev) {
 // feature-draw.js: new feature-tier renderer
 //
 
-function BoxGlyph(x, y, width, height, fill, stroke, radius) {
+function BoxGlyph(x, y, width, height, fill, stroke, alpha, radius) {
     this.x = x;
     this.y = y;
     this._width = width;
     this._height = height;
     this.fill = fill;
     this.stroke = stroke;
+    this._alpha = alpha;
     this._radius = radius || 0;
 }
 
@@ -9064,6 +9477,11 @@ BoxGlyph.prototype.draw = function(g) {
 
     g.closePath();
 
+    if (this._alpha != null) {
+	g.save();
+	g.globalAlpha = this._alpha;
+    }
+    
     if (this.fill) {
 	g.fillStyle = this.fill;
 	g.fill();
@@ -9073,10 +9491,14 @@ BoxGlyph.prototype.draw = function(g) {
 	g.lineWidth = 0.5;
 	g.stroke();
     }
+
+    if (this._alpha != null) {
+	g.restore();
+    }
 }
 
 BoxGlyph.prototype.toSVG = function() {
-    return makeElementNS(NS_SVG, 'rect', null,
+    var s = makeElementNS(NS_SVG, 'rect', null,
 			 {x: this.x, 
 			  y: this.y, 
 			  width: this._width, 
@@ -9084,6 +9506,11 @@ BoxGlyph.prototype.toSVG = function() {
 			  stroke: this.stroke || 'none',
 			  strokeWidth: 0.5,
 			  fill: this.fill || 'none'});
+    if (this._alpha != null) {
+	s.setAttribute('opacity', this._alpha);
+    }
+
+    return s;
 }
 
 BoxGlyph.prototype.min = function() {
@@ -10079,6 +10506,38 @@ SequenceGlyph.prototype.toSVG = function() {
 }
 
 
+function TranslatedGlyph(glyph, x, y, height) {
+    this.glyph = glyph;
+    this._height = height;
+    this._x = x;
+    this._y = y;
+}
+
+TranslatedGlyph.prototype.height = function() {
+    return this._height;
+}
+
+TranslatedGlyph.prototype.min = function() {
+    return this.glyph.min() + this._x;
+}
+
+TranslatedGlyph.prototype.max = function() {
+    return this.glyph.max() + this._x;
+}
+
+TranslatedGlyph.prototype.draw = function(g) {
+    g.save();
+    g.translate(this._x, this._y);
+    this.glyph.draw(g);
+    g.restore();
+}
+
+TranslatedGlyph.prototype.toSVG = function() {
+    var s =  this.glyph.toSVG();
+    s.setAttribute('transform', 'translate(' + this._x + ',' + this._y + ')');
+    return s;
+}
+
 function PointGlyph(x, y, height, fill) {
     this._x = x;
     this._y = y;
@@ -10314,12 +10773,15 @@ Browser.prototype.createFeatureSource = function(config) {
         fs = new JBrowseFeatureSource(config);
     } else if (config.tier_type == 'ensembl') {
         fs = new EnsemblFeatureSource(config);
-    } else {
+    } else if (config.uri || config.features_uri) {
         fs = new DASFeatureSource(config);
     }
 
-    if (fs && config.overlay) {
-        var sources = [fs]
+    if (config.overlay) {
+        var sources = [];
+        if (fs)
+            sources.push(fs);
+
         for (var oi = 0; oi < config.overlay.length; ++oi) {
             sources.push(this.createFeatureSource(config.overlay[oi]));
         }
@@ -10328,6 +10790,10 @@ Browser.prototype.createFeatureSource = function(config) {
 
     if (config.mapping) {
         fs = new MappedFeatureSource(fs, this.chains[config.mapping]);
+    }
+
+    if (config.name && !fs.name) {
+        fs.name = config.name;
     }
 
     return fs;
@@ -10353,7 +10819,12 @@ DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
     }
 
     if (!this.dasSource.uri) {
+        // FIXME should this be making an error callback???
         return;
+    }
+
+    if (this.dasSource.dasStaticFeatures && this.cachedStaticFeatures) {
+        return callback(null, this.cachedStaticFeatures, this.cachedStaticScale);
     }
 
     var tryMaxBins = (this.dasSource.maxbins !== false);
@@ -10364,6 +10835,7 @@ DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
         fops.maxbins = 1 + (((max - min) / scale) | 0);
     }
     
+    var thisB = this;
     this.dasSource.features(
         new DASSegment(chr, min, max),
         fops,
@@ -10371,6 +10843,10 @@ DASFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, c
             var retScale = scale;
             if (!tryMaxBins) {
                 retScale = 0.1;
+            }
+            if (!status && thisB.dasSource.dasStaticFeatures) {
+                thisB.cachedStaticFeatures = features;
+                thisB.cachedStaticScale = retScale;
             }
             callback(status, features, retScale);
         }

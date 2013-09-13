@@ -1618,7 +1618,7 @@ function Browser(opts) {
         opts = {};
     }
 
-    // custom code
+	// custom code
     //this.uiPrefix = 'http://www.biodalliance.org/canvas/';
     this.uiPrefix = 'http://localhost:8080/';
     // custom code
@@ -4379,7 +4379,8 @@ Browser.prototype.popit = function(ev, name, ele, opts)
         closeButton.addEventListener('mouseout', function(ev) {
             closeButton.style.color = 'black';
         }, false);
-        closeButton.addEventListener('mousedown', function(ev) {
+        closeButton.addEventListener('click', function(ev) {
+            ev.preventDefault(); ev.stopPropagation();
             thisB.removeAllPopups();
         }, false);
         var tbar = makeElement('h3', [makeElement('span', name, null, {maxWidth: '200px'}), closeButton], {className: 'popover-title'}, {});
@@ -4744,7 +4745,7 @@ DasTier.prototype.paint = function() {
     }
     gc.restore();
 
-    if (quant && this.quantLeapThreshold && this.featureSource && this.featureSource.quantFindNextFeature) {
+    if (quant && this.quantLeapThreshold && this.featureSource && sourceAdapterIsCapable(this.featureSource, 'quantLeap')) {
 	var ry = 3 + subtiers[0].height * (1.0 - ((this.quantLeapThreshold - quant.min) / (quant.max - quant.min)));
 
 	gc.save();
@@ -10098,10 +10099,13 @@ PointGlyph.prototype.height = function() {
 }
 
 PointGlyph.prototype.draw = function(g) {
+    g.save();
+    g.globalAlpha = 0.3;
     g.fillStyle = this._fill;
     g.beginPath();
-    g.arc(this._x, this._y, 2, 0, 6.29);
+    g.arc(this._x, this._y, 1.5, 0, 6.29);
     g.fill();
+    g.restore();
 }
 
 PointGlyph.prototype.toSVG = function() {
@@ -10531,6 +10535,13 @@ BWGFeatureSource.prototype.init = function() {
     make(arg, function(bwg) {
         thisB.bwgHolder.provide(bwg);
     }, this.opts.credentials);
+}
+
+BWGFeatureSource.prototype.capabilities = function() {
+    var caps = {leap: true};
+    if (this.bwgHolder.res && this.bwgHolder.res.type == 'bigwig')
+        caps.quantLeap = true;
+    return caps;
 }
 
 BWGFeatureSource.prototype.fetch = function(chr, min, max, scale, types, pool, callback) {
@@ -10978,7 +10989,11 @@ JBrowseFeatureSource.prototype.fetch = function(chr, min, max, scale, types, poo
     );
 }
 
-
+function sourceAdapterIsCapable(s, cap) {
+    if (!s.capabilities)
+        return false;
+    else return s.capabilities()[cap];
+}
 /* -*- mode: javascript; c-basic-offset: 4; indent-tabs-mode: nil -*- */
 
 // 
